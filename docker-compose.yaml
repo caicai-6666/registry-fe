@@ -1,0 +1,18 @@
+name: registry-frontend
+
+services:
+  frontend:
+    build: .
+    image: registry-fe:local
+    environment:
+      BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-backend:8000}
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-23080}:80"
+    networks:
+      - registry
+    restart: unless-stopped
+
+networks:
+  registry:
+    external: true
+    name: ${REGISTRY_NETWORK:-registry_registry}
