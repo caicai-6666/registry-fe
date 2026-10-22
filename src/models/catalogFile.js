@@ -1,9 +1,15 @@
+import { parseFileLevel } from './fileLevel.js'
 import { parsePassports } from './passport.js'
 import { REGISTRY_API_BASE_PATH } from '../services/registryApi.js'
 
 export function parseCatalogJson(text) {
   // 读取原始整数文本，避免 BIGINT ID 经 JavaScript number 四舍五入。
   return JSON.parse(text, (key, value, context) => {
+    if (key === 'file_level' && typeof value === 'number') {
+      if (context?.source && /^-?\d+$/.test(context.source)) return parseFileLevel(context.source)
+      if (!Number.isSafeInteger(value)) throw new Error('浏览器无法精确读取文件等级')
+      return parseFileLevel(value)
+    }
     if (key !== 'id' || typeof value !== 'number') return value
     if (context?.source && /^[1-9]\d*$/.test(context.source)) return context.source
     if (!Number.isSafeInteger(value)) throw new Error('浏览器无法精确读取文件 ID')
@@ -31,6 +37,7 @@ export function parseCatalogList(payload) {
       reviewerIdentity: row.reviewer?.trim() || null, applicant: row.applicant?.trim() || '—', reviewer: row.reviewer?.trim() || '—',
       ingestedAt: date.toISOString(), ingestionLabel: `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`,
       summary: row.abstract, url: `${REGISTRY_API_BASE_PATH}/resource/file/${id}`,
+      fileLevel: row.file_level == null ? null : parseFileLevel(row.file_level),
       passport: parsePassports(row.passport === undefined ? null : row.passport),
     })
   }))

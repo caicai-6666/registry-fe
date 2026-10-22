@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { parseFileLevel } from '../models/fileLevel.js'
 import { platformDisplayName } from '../models/platform.js'
 import { formatReviewTime } from '../models/reviewHistory.js'
 import DecisionConfirmButton from './DecisionConfirmButton.vue'
@@ -7,9 +8,17 @@ import PassportValues from './PassportValues.vue'
 import PassportSelector from './PassportSelector.vue'
 const props = defineProps({ kind: { type: String, default: 'ingestion' }, application: { type: Object, required: true }, platforms: { type: Array, default: () => [] }, passportOptions: { type: Array, default: () => [] }, passportError: { type: String, default: '' }, decision: { type: Object, default: null }, busy: Boolean, active: { type: Boolean, default: true } })
 const emit = defineEmits(['preview', 'decide', 'retry', 'reload-passports'])
-const drafts = reactive({}), passportDrafts = reactive({})
+const drafts = reactive({}), passportDrafts = reactive({}), fileLevelDrafts = reactive({})
 const selectedPassports = computed({ get: () => props.decision?.body?.passport || passportDrafts[props.application.id] || [], set: values => { passportDrafts[props.application.id] = values } })
 const note = computed({ get: () => props.decision?.body?.note ?? drafts[props.application.id] ?? '', set: value => { drafts[props.application.id] = value } })
+const fileLevel = computed({ get: () => props.decision?.body?.file_level ?? fileLevelDrafts[props.application.id] ?? '0', set: value => { fileLevelDrafts[props.application.id] = String(value) } })
+const fileLevelError = computed(() => {
+  try {
+    const level = BigInt(parseFileLevel(fileLevel.value))
+    return level < 0n || level > 100n ? '文件等级需在 0–100 之间' : ''
+  } catch { return '请输入 0–100 的整数等级' }
+})
+const canApprove = computed(() => canDecide.value && (props.kind !== 'ingestion' || !fileLevelError.value))
 const locked = computed(() => props.busy || Boolean(props.decision?.body))
 const canDecide = computed(() => !locked.value && !!note.value.trim() && Array.from(note.value).length <= 10000)
 const confirming = ref(null)
@@ -24,13 +33,13 @@ watch(confirming, value => {
 }, { flush: 'sync' })
 onBeforeUnmount(() => clearTimeout(confirmationTimer))
 const actions = [{ approved: false, label: '拒绝' }, { approved: true, label: '通过' }]
-watch([() => props.application.id, note, selectedPassports, locked, () => props.active], () => { confirming.value = null }, { flush: 'sync' })
+watch([() => props.application.id, note, selectedPassports, fileLevel, locked, () => props.active], () => { confirming.value = null }, { flush: 'sync' })
 function decide(approved) {
-  if (!canDecide.value) return
+  if (!canDecide.value || (approved && !canApprove.value)) return
   if (confirming.value !== approved) { confirming.value = approved; return }
   submittedAction.value = approved
   confirming.value = null
-  emit('decide', { approved, note: note.value, ...(props.kind === 'ingestion' ? { passport: selectedPassports.value } : {}) })
+  emit('decide', { approved, note: note.value, ...(props.kind === 'ingestion' ? { passport: selectedPassports.value, ...(approved ? { file_level: fileLevel.value } : {}) } : {}) })
 }
 </script>
 <template>
@@ -43,11 +52,18 @@ function decide(approved) {
     </div>
     <form class="ingestion-detail__review" @submit.prevent @keydown.esc="confirming = null">
       <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" /></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy" @click="$emit('reload-passports')">重新加载</button></p>
+      <div v-if="kind === 'ingestion'" class="ingestion-detail__level">
+        <div class="ingestion-detail__level-heading"><label :for="`review-level-${application.id}`">文件等级</label><span :id="`review-level-hint-${application.id}`" :class="{ 'is-invalid': !!fileLevelError }">{{ fileLevelError || '通过时生效 · 0–100' }}</span></div>
+        <div class="ingestion-detail__level-controls">
+          <input v-model="fileLevel" class="ingestion-detail__level-slider" type="range" min="0" max="100" step="1" :disabled="locked" aria-label="滑动设置文件等级" :aria-describedby="`review-level-hint-${application.id}`" :style="{ '--level-progress': `${Math.max(0, Math.min(100, Number(fileLevel) || 0))}%` }" />
+          <input :id="`review-level-${application.id}`" v-model="fileLevel" class="ingestion-detail__level-number" type="number" min="0" max="100" step="1" :disabled="locked" :aria-describedby="`review-level-hint-${application.id}`" :aria-invalid="!!fileLevelError" />
+        </div>
+      </div>
       <p v-if="kind === 'deletion' && passportError" class="ingestion-detail__error" role="alert">文件信息加载失败：{{ passportError }} <button type="button" :disabled="busy" @click="$emit('reload-passports')">重新加载</button></p><div class="ingestion-detail__note-heading"><label :for="`review-note-${application.id}`">审核员备注 <span aria-hidden="true">*</span></label><span :id="`review-note-hint-${application.id}`" class="ingestion-detail__note-hint">通过与拒绝均需填写备注</span><small>{{ Array.from(note).length }} / 10000</small></div>
       <textarea :id="`review-note-${application.id}`" v-model="note" :disabled="locked" :aria-describedby="`review-note-hint-${application.id}`" aria-required="true" required maxlength="10000" rows="3" placeholder="请填写审核意见，通过与拒绝均需填写…"></textarea>
       <p v-if="decision?.error" class="ingestion-detail__error" role="alert">{{ decision.error }}</p>
-      <p v-if="decision?.body && !decision.pending" class="ingestion-detail__feedback">提交结果尚未确认，已保留原审核决定、备注{{ kind === 'ingestion' ? '及通行证' : '' }}，请按原请求重试。</p>
-      <div class="ingestion-detail__actions"><button v-if="decision?.body && !decision.pending" type="button" class="ingestion-detail__approve" :disabled="busy" @click="$emit('retry')">重试原审核决定</button><DecisionConfirmButton v-for="action in actions" :key="String(action.approved)" :label="action.label" :confirming="confirming === action.approved" :loading="loadingAction === action.approved" :disabled="!canDecide" :class="action.approved ? 'ingestion-detail__approve' : 'ingestion-detail__reject'" @activate="decide(action.approved)" /></div>
+      <p v-if="decision?.body && !decision.pending" class="ingestion-detail__feedback">提交结果尚未确认，已保留原审核决定、备注{{ kind === 'ingestion' ? '、通行证及文件等级' : '' }}，请按原请求重试。</p>
+      <div class="ingestion-detail__actions"><button v-if="decision?.body && !decision.pending" type="button" class="ingestion-detail__approve" :disabled="busy" @click="$emit('retry')">重试原审核决定</button><DecisionConfirmButton v-for="action in actions" :key="String(action.approved)" :label="action.label" :confirming="confirming === action.approved" :loading="loadingAction === action.approved" :disabled="action.approved ? !canApprove : !canDecide" :class="action.approved ? 'ingestion-detail__approve' : 'ingestion-detail__reject'" @activate="decide(action.approved)" /></div>
     </form>
   </div>
 </template>
@@ -74,6 +90,18 @@ function decide(approved) {
 .ingestion-detail__passport-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .ingestion-detail__passport-field:disabled { opacity: .65; }
 .ingestion-detail__error button { border: 0; background: transparent; color: #807197; font: inherit; cursor: pointer; }
+.ingestion-detail__level { margin: 4px 0 18px; }
+.ingestion-detail__level-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.ingestion-detail__level label { color: #536659; font-size: 12px; font-weight: 600; }
+.ingestion-detail__level-heading > span { color: #9aa69d; font-size: 10px; line-height: 1.6; }
+.ingestion-detail__level-heading > span.is-invalid { color: #ad6872; }
+.ingestion-detail__level-controls { display: flex; align-items: center; gap: 18px; }
+.ingestion-detail__level-slider { flex: 1; min-width: 0; height: 6px; margin: 10px 0; appearance: none; border-radius: 9px; background: linear-gradient(to right, #9b8cbe 0 var(--level-progress), #e3e8e3 var(--level-progress) 100%); cursor: pointer; }
+.ingestion-detail__level-slider::-webkit-slider-thumb { appearance: none; width: 16px; height: 16px; border: 3px solid #fff; border-radius: 50%; background: #9b8cbe; box-shadow: 0 2px 7px #67558540; transition: box-shadow .2s; }
+.ingestion-detail__level-slider::-moz-range-thumb { width: 10px; height: 10px; border: 3px solid #fff; border-radius: 50%; background: #9b8cbe; box-shadow: 0 2px 7px #67558540; }
+.ingestion-detail__level-slider:disabled { opacity: .55; cursor: default; }
+.ingestion-detail__level-number { flex: none; width: 72px; padding: 8px 10px; border: 1px solid #a1b2a53b; border-radius: 9px; background: #fff; color: #455e4d; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+.ingestion-detail__level input:focus-visible { outline: 2px solid #9d94c566; outline-offset: 3px; }
 .ingestion-detail__note-heading { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 12px; margin-bottom: 10px; }
 .ingestion-detail__note-heading label { color: #536659; font-size: 12px; font-weight: 600; }
 .ingestion-detail__note-heading label > span { color: #b5747c; }

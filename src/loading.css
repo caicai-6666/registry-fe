@@ -1,0 +1,12 @@
+.registry-loading { display: flex; justify-content: center; align-items: center; }
+.registry-loading[hidden] { display: none; }
+.registry-loading__label { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* From Uiverse.io by satyamchaudharydev，沿用用户提供的五色竖条动画。 */
+.registry-loading .loading { --speed-of-animation: .9s; --gap: 6px; --first-color: #4c86f9; --second-color: #49a84c; --third-color: #f6bb02; --fourth-color: #f6bb02; --fifth-color: #2196f3; display: flex; justify-content: center; align-items: center; width: 100px; height: 100px; gap: var(--gap); }
+.registry-loading .loading span { width: 4px; height: 50px; background: var(--first-color); animation: registry-loading-scale var(--speed-of-animation) ease-in-out infinite; }
+.registry-loading .loading span:nth-child(2) { background: var(--second-color); animation-delay: -.8s; }
+.registry-loading .loading span:nth-child(3) { background: var(--third-color); animation-delay: -.7s; }
+.registry-loading .loading span:nth-child(4) { background: var(--fourth-color); animation-delay: -.6s; }
+.registry-loading .loading span:nth-child(5) { background: var(--fifth-color); animation-delay: -.5s; }
+@keyframes registry-loading-scale { 0%, 40%, 100% { transform: scaleY(.05); } 20% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .registry-loading .loading span { animation: none; transform: scaleY(.4); } }

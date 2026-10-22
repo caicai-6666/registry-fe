@@ -1,6 +1,6 @@
 # 正式文件目录与原件接入
 
-数据中心结果列表使用 `GET /registry/api/catalog/list`，点击表项后使用 `GET /registry/api/resource/file/{resource_id}` 获取原件。两者均携带人员 `login_code` 的 Bearer 凭据，开发请求经 `/dev` 同源映射，生产经 `/registry` 同源代理。契约见[后端目录 API](../../../registry-be/description/api/catalog.md)与[后端原件 API](../../../registry-be/description/api/resource.md)。
+数据中心结果列表使用 `GET /knowledge-accumulation/registry/api/catalog/list`，点击表项后使用 `GET /knowledge-accumulation/registry/api/resource/file/{resource_id}` 获取原件。两者均携带平台 `access_token` 的 Bearer 凭据，构建部署请求经 `/knowledge-accumulation/registry/api/` 同源代理，开发浏览器请求增加 `/dev` 前缀，由 Vite 代理移除。契约见[后端目录 API](../../../registry-be/description/api/catalog.md)与[后端原件 API](../../../registry-be/description/api/resource.md)。
 
 ## 目录与展示模型
 
@@ -24,7 +24,7 @@
 
 ## 加载、筛选与异常
 
-[`DataCenterPanel.vue`](../../src/components/DataCenterPanel.vue) 持有目录与筛选状态，调用 [`useCatalog()`](../../src/composables/useCatalog.js) 在进入数据中心或页面恢复可见时读取目录；离开／隐藏取消未完成请求，卸载清理监听。目录不固定轮询，与平台同步计划独立。并发触发合并为当前请求，取消后的晚到响应不覆盖结果。失败显示后端错误和重试按钮，并保留上次成功目录；成功空数组显示“暂无入库文件”。
+[`DataCenterPanel.vue`](../../src/components/DataCenterPanel.vue) 持有目录与筛选状态，调用 [`useCatalog()`](../../src/composables/useCatalog.js) 在首次进入数据中心时读取目录，成功后（包括空数组）在当前页面缓存；切换回来及恢复页面可见时复用数据，不重复请求或显示 loading。手动刷新和错误重试主动获取最新目录；首次失败或中断不视为完成，可重新进入重试。离开／隐藏取消未完成请求，卸载清理监听；页面刷新、组件卸载或共享访问凭据改变后重新加载。目录不固定轮询，与平台同步计划独立。并发触发合并为当前请求，取消后的晚到响应不覆盖结果。失败显示后端错误和重试按钮，并保留上次成功目录；成功空数组或筛选无匹配时显示 `empty.webp` 和“空空如也”；读取及刷新使用居中转圈，遵循[列表与详情的状态展示](workspace.md#列表与详情的状态展示)。
 
 后端当前一次返回全部文件，不分页、不接受过滤参数。前端未选平台时展示全部记录；选中平台后按 `source_platform` 在本地过滤，支持多选和全选。平台、时间、通行证前缀及文件名、摘要、申请人、审核人条件均在前端过滤并取交集。不因来源平台当前不存活而删除正式文件记录。
 
@@ -34,7 +34,7 @@
 
 [`CatalogFilters.vue`](../../src/components/CatalogFilters.vue) 参照合同库筛选条，用 [`CatalogDateFilter.vue`](../../src/components/CatalogDateFilter.vue) 的年／月／日滚轮筛选入库时间。条件筛选在左侧栏分为日期、文件信息、通行证及人员三个层次，以细分隔线和留白区分，不增加卡片容器或标题；各筛选标签使用统一宽度，放在对应控件左侧并居中对齐；文本输入统一 38px 高，采用浅色平面、细边框及柔和聚焦反馈；日期滚轮去除立体阴影，与文本框统一圆角和配色。平台同步和平台选择也位于左栏，文件列表位于右侧。窄屏整页上下排列，不增加独立框容器。
 
-筛选区底部提供“重置”按钮，保留蓝色渐变及悬停、按压反馈，收敛为带重置图标的 34px 紧凑按钮，一次清空平台选择、入库年／月／日、通行证前缀及四项关键词，并关闭通行证提示。重置仅恢复本地筛选，不重新请求目录或改变平台同步计划；未选择平台表示不限平台。
+平台概览顶部的“全选”旁提供“重置”按钮，采用用户提供的 Uiverse.io / elijahgummer 浅灰立体按键样式，保留多层阴影与按下下沉效果，适配为带图标的紧凑按钮，一次清空平台选择、入库年／月／日、通行证前缀及四项关键词，并关闭通行证提示。重置仅恢复本地筛选，不重新请求目录或改变平台同步计划；未选择平台表示不限平台。
 
 - 文件名、文件摘要、申请人和审核人按文本模糊匹配，忽略首尾空白及英文大小写：空格分隔的关键词均需命中，每个关键词内部允许按原文顺序跳字；空关键词不限，缺失字段不匹配非空关键词。文件名、申请人、审核人提供完整目录中的候选提示，去重并排除空值及“—”，按相同文本规则过滤，完整相同、前缀、包含、跳字匹配依次优先，最多 20 条。文本及通行证输入过程中仅更新草稿和候选提示，离开输入控件后才应用筛选；点击候选或清空按钮直接确认该值，重置同时清空草稿及已应用条件。平台和日期选择仍即时应用。所有输入提示（含通行证）仅在输入非空白内容后展示，清空或重置立即隐藏，单独聚焦空输入不展示。摘要不提供候选提示，所有条件在本地组合，不增加接口参数。
 - 年份来自全部目录中的入库时间，默认“—”表示不限；选年后可选月，选月后可选日。滚动、点击及方向键均可操作，Home／End 到达两端。
@@ -48,7 +48,7 @@
 
 ## 鉴权原件与缓存
 
-`registryApiFileRequest()` 复用 JSON 请求的同源路径约束、15 秒请求／响应体期限、取消、错误 detail 和 401 会话失效机制。成功读取完整 Blob 和响应头；错误 JSON 不交给文件渲染器，网关返回的 HTML／JSON 页面也不作为原件缓存。不会把免登码放入 URL。
+`registryApiFileRequest()` 复用 JSON 请求的同源路径约束、15 秒请求／响应体期限、取消、错误 detail 和 401 会话失效机制。成功读取完整 Blob 和响应头；错误 JSON 不交给文件渲染器，网关返回的 HTML／JSON 页面也不作为原件缓存。不会把 token 放入 URL。
 
 展示器按资源 URL 缓存下载 Blob，再创建本地 blob URL 供渲染器、新窗口和下载使用。关闭弹窗撤销该次 blob URL，保留 Blob；再次打开同一文件不会重复调用原件接口。PDF 每次创建独立字节副本交给 Worker。缓存随展示器卸载、退出和刷新清空，失败可重试；完整机制见[文件展示器](file-preview.md#页面内临时文件缓存)。
 
@@ -82,3 +82,7 @@
 - [历史筛选布局](../assets/screenshots/catalog-filters-desktop.jpg)
 - [通行证前缀提示](../assets/screenshots/catalog-passport-filter-desktop.jpg)
 - [多通行证历史详情](../assets/screenshots/passport-arrays-history.jpg)
+
+目录 `file_level` 映射为 `fileLevel`，保留精确整数，null 或历史缺失保持未知。该值用于[文件预览中的等级按钮](file-preview.md#文件等级悬浮层)，不额外请求，不在列表表项上添加等级标签。
+
+文本筛选框（文件名、摘要、通行证、申请人、审核人）采用 Uiverse.io / AbanoubMagdy1 的波浪浮动标签：聚焦时标签逐字上浮，底线从中心展开；有值时保持上浮，空值失焦后回落。筛选允许为空，不使用 required；原有提示、失焦应用筛选和清空逻辑保持一致，减少动画偏好下关闭动效。入库时间继续使用滚轮选择。

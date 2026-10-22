@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { groupCatalogByMonth } from '../models/catalogTimeline.js'
 import { platformDisplayName } from '../models/platform.js'
+import ContentState from './ContentState.vue'
 import RefreshButton from './RefreshButton.vue'
 import RegistryFilePreview from './RegistryFilePreview.vue'
 
@@ -12,7 +13,6 @@ const props = defineProps({
   loading: Boolean,
   loaded: Boolean,
   error: { type: String, default: '' },
-  hasFiles: Boolean,
 })
 defineEmits(['retry', 'refresh'])
 const files = computed(() => props.files)
@@ -43,11 +43,7 @@ function restorePosition(element) {
     </div>
     <div class="registry-results__body">
       <div v-if="error" class="registry-results__notice" role="alert"><span>{{ error }}</span><button type="button" @click="$emit('retry')">重试</button></div>
-      <p v-else-if="!loaded && loading" class="registry-results__notice" role="status">正在加载文件目录…</p>
-      <Transition name="catalog-empty">
-        <p v-if="!error && loaded && !files.length" class="registry-results__notice registry-results__empty" role="status">{{ hasFiles ? '暂无匹配文件' : '暂无入库文件' }}</p>
-      </Transition>
-      <TransitionGroup name="catalog-file" tag="ul" class="registry-results__list" aria-label="文件列表" @before-leave="preserveLeavingPosition" @enter="restorePosition" @leave-cancelled="restorePosition">
+      <ContentState :loading="loading" :empty="!error && loaded && !files.length" loading-label="正在加载文件列表"><TransitionGroup name="catalog-file" tag="ul" class="registry-results__list" aria-label="文件列表" @before-leave="preserveLeavingPosition" @enter="restorePosition" @leave-cancelled="restorePosition">
         <li v-for="entry in timelineEntries" :key="entry.key" :class="entry.kind === 'month' ? 'registry-month' : 'registry-file'">
           <h3 v-if="entry.kind === 'month'" class="registry-month__title">{{ entry.label }}</h3>
           <template v-else>
@@ -65,7 +61,7 @@ function restorePosition(element) {
           </dl>
           </template>
         </li>
-      </TransitionGroup>
+      </TransitionGroup></ContentState>
     </div>
     <RegistryFilePreview :file="previewFile" @close="previewFile = null" />
   </section>
@@ -74,7 +70,7 @@ function restorePosition(element) {
 <style scoped>
 .registry-results { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 20px 0 0; }
 .registry-results__toolbar { display: flex; flex: none; justify-content: flex-end; padding: 3px 3px 14px; }
-.registry-results__body { position: relative; flex: 1; min-height: 0; padding: 3px; overflow: auto; }
+.registry-results__body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 3px; overflow: hidden; }
 .registry-results__notice { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 80px; margin: 0; color: #89938d; font-size: 12px; }
 .registry-results__notice button { padding: 6px 12px; border: 1px solid #d2dccf; border-radius: 7px; background: #f1f5ee; color: #597563; cursor: pointer; }
 .registry-results__list { position: relative; display: grid; gap: 9px; margin: 0; padding: 0; list-style: none; }
@@ -110,9 +106,5 @@ function restorePosition(element) {
 .catalog-file-leave-active { position: absolute; pointer-events: none; z-index: 1; transition: opacity .28s ease, transform .34s cubic-bezier(.4, 0, .6, 1); }
 .catalog-file-leave-to { opacity: 0; transform: translateX(-24px); }
 .catalog-file-move { transition: transform .46s cubic-bezier(.22, 1, .36, 1); }
-.registry-results__empty { position: absolute; top: 3px; left: 3px; right: 3px; pointer-events: none; }
-.catalog-empty-enter-active { transition: opacity .28s ease .34s, transform .34s ease .34s; }
-.catalog-empty-leave-active { transition: opacity .18s ease, transform .18s ease; }
-.catalog-empty-enter-from, .catalog-empty-leave-to { opacity: 0; transform: translateY(8px); }
-@media (prefers-reduced-motion: reduce) { .registry-file, .catalog-file-enter-active, .catalog-file-leave-active, .catalog-file-move, .catalog-empty-enter-active, .catalog-empty-leave-active { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .registry-file, .catalog-file-enter-active, .catalog-file-leave-active, .catalog-file-move { transition: none; } }
 </style>

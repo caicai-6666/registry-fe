@@ -39,6 +39,6 @@ export function attachDeletionResources(applications, catalog) {
   const files = new Map(catalog.map(file => [file.id, file]))
   return applications.map(application => {
     const file = files.get(application.resourceId)
-    return { ...application, name: file?.name || `文件资源 #${application.resourceId}`, summary: file?.summary ?? null }
+    return { ...application, name: file?.name || `文件资源 #${application.resourceId}`, summary: file?.summary ?? null, fileLevel: file?.fileLevel ?? null }
   })
 }

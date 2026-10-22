@@ -1,3 +1,4 @@
+import { parseFileLevel } from './fileLevel.js'
 import { parsePassports } from './passport.js'
 export function parsePendingIngestionReviews(payload) {
   if (!Array.isArray(payload)) throw new Error('入库申请返回了无效的数据')
@@ -18,13 +19,15 @@ export function parsePendingIngestionReviews(payload) {
   }))
 }
 
-export function createIngestionDecision(approved, note, passport = null) {
+export function createIngestionDecision(approved, note, passport = null, fileLevel = null) {
   if (typeof approved !== 'boolean') throw new Error('审核结论无效')
   if (typeof note !== 'string' || !note.trim()) throw new Error('请填写审核员备注')
   if (Array.from(note).length > 10000) throw new Error('审核员备注不能超过 10000 字')
+  const level = approved ? parseFileLevel(fileLevel) : null
+  if (!approved && fileLevel !== null && fileLevel !== undefined) throw new Error('拒绝入库不能设置文件等级')
   const values = parsePassports(passport)
   // 空选择省略字段，让后端生成；拒绝始终提交空数组。
-  return Object.freeze({ approved, note: note.trim(), ...(!approved ? { passport: Object.freeze([]) } : values?.length ? { passport: values } : {}) })
+  return Object.freeze({ approved, note: note.trim(), ...(approved ? { file_level: level } : {}), ...(!approved ? { passport: Object.freeze([]) } : values?.length ? { passport: values } : {}) })
 }
 
 export function parseIngestionDecisionResult(row) {
@@ -35,7 +38,9 @@ export function parseIngestionDecisionResult(row) {
       (row.status === 'rejected' && resourceId !== null) || typeof row.reviewer !== 'string' || !row.reviewer.trim() || typeof row.reviewer_note !== 'string' ||
       typeof row.reviewed_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(row.reviewed_at) || !Number.isFinite(Date.parse(row.reviewed_at)) ||
       typeof row.result_message_id !== 'string' || !row.result_message_id.trim()) throw new Error('入库审核结果返回了无效的数据')
+  const fileLevel = row.file_level === null ? null : parseFileLevel(row.file_level)
+  if (row.status === 'rejected' && fileLevel !== null) throw new Error('拒绝入库结果不能包含文件等级')
   const passport = parsePassports(row.passport, { nullable: false })
   if ((row.status === 'approved') !== (passport.length > 0)) throw new Error('入库审核结果的通行证与状态不一致')
-  return Object.freeze({ id, resourceId, status: row.status, passport, reviewer: row.reviewer, reviewerNote: row.reviewer_note, reviewedAt: row.reviewed_at, resultMessageId: row.result_message_id })
+  return Object.freeze({ id, resourceId, fileLevel, status: row.status, passport, reviewer: row.reviewer, reviewerNote: row.reviewer_note, reviewedAt: row.reviewed_at, resultMessageId: row.result_message_id })
 }

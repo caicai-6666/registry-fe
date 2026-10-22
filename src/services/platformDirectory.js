@@ -1,4 +1,5 @@
 export const PLATFORM_DIRECTORY_KEY = Symbol('registry-platform-directory')
+export const PLATFORM_REFRESH_KEY = Symbol('registry-platform-refresh')
 import { readonly, shallowRef } from 'vue'
 import { parsePlatformList, parsePlatformSyncTime } from '../models/platform.js'
 import { registryApiRequest } from './registryApi.js'
@@ -12,7 +13,7 @@ export function createPlatformDirectory({
   fetchSyncTime = init => registryApiRequest('/platform/sync-time', { ...init, method: 'GET' }),
 } = {}) {
   const state = shallowRef(Object.freeze({
-    platforms: Object.freeze([]), updatedAt: null, nextSyncAt: null,
+    platforms: Object.freeze([]), allPlatforms: Object.freeze([]), updatedAt: null, nextSyncAt: null,
     isStale: true, isRefreshing: false, error: null, scheduleError: null,
   }))
   let running = false
@@ -38,7 +39,8 @@ export function createPlatformDirectory({
     try {
       const payload = await fetchList({ signal: current.controller.signal })
       if (!isCurrent(current)) return
-      update({ platforms: parsePlatformList(payload), updatedAt: new Date().toISOString(), isStale: false, error: null })
+      const allPlatforms = parsePlatformList(payload, { includeRegistry: true })
+      update({ allPlatforms, platforms: Object.freeze(allPlatforms.filter(platform => platform.code !== 'registry')), updatedAt: new Date().toISOString(), isStale: false, error: null })
     } catch (error) {
       fail(error, current, { isStale: true, error: error instanceof Error ? error.message : '平台状态查询失败，请稍后重试' })
     }

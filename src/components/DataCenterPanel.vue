@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { useCatalog } from '../composables/useCatalog.js'
 import { catalogYears, catalogPassportSuggestions, catalogTextSuggestions, filterCatalogFiles } from '../models/catalogFilters.js'
+import RaisedActionButton from './RaisedActionButton.vue'
 import CatalogFilters from './CatalogFilters.vue'
 import PlatformOverview from './PlatformOverview.vue'
 import RegistryResults from './RegistryResults.vue'
@@ -39,18 +40,21 @@ watch(years, available => { if (dateFilter.value.year !== null && !available.inc
 <template>
   <section class="data-center-panel" aria-label="数据中心内容区域">
     <aside class="data-center-panel__filters" aria-label="文件筛选">
-    <PlatformOverview :snapshot="platformSnapshot" :selected-platform-codes="selectedPlatformCodes" @toggle-platform="$emit('toggle-platform', $event)" @select-all-platforms="$emit('select-all-platforms', $event)" />
+    <PlatformOverview :snapshot="platformSnapshot" :selected-platform-codes="selectedPlatformCodes" @toggle-platform="$emit('toggle-platform', $event)" @select-all-platforms="$emit('select-all-platforms', $event)">
+      <template #actions><RaisedActionButton class="catalog-filters__reset" @click="resetFilters"><template #icon><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7a6 6 0 1 1-.3 5M4 3v4h4" /></svg></template>重置</RaisedActionButton></template>
+    </PlatformOverview>
 
     <section class="data-center-region" aria-label="筛选条件">
-      <CatalogFilters :value="dateFilter" :years="years" :text-filters="textFilters" :text-suggestions="textSuggestions" @text-change="textFilters[$event.field] = $event.value" :passport-prefix="passportPrefix" :passport-suggestions="passportSuggestions" @change="dateFilter = $event" @passport-change="passportPrefix = $event" @passport-commit="appliedPassportPrefix = $event" @text-commit="appliedTextFilters[$event.field] = $event.value" @reset="resetFilters" />
+      <CatalogFilters :value="dateFilter" :years="years" :text-filters="textFilters" :text-suggestions="textSuggestions" @text-change="textFilters[$event.field] = $event.value" :passport-prefix="passportPrefix" :passport-suggestions="passportSuggestions" @change="dateFilter = $event" @passport-change="passportPrefix = $event" @passport-commit="appliedPassportPrefix = $event" @text-commit="appliedTextFilters[$event.field] = $event.value" />
     </section>
 
     </aside>
-    <RegistryResults class="data-center-panel__results" :active="active" :platforms="platformSnapshot?.platforms || []" :files="filteredFiles" :loading="catalog.loading.value" :loaded="catalog.loaded.value" :error="catalog.error.value" :has-files="catalog.files.value.length > 0" @retry="catalog.load" @refresh="catalog.load" />
+    <RegistryResults class="data-center-panel__results" :active="active" :platforms="platformSnapshot?.platforms || []" :files="filteredFiles" :loading="catalog.loading.value" :loaded="catalog.loaded.value" :error="catalog.error.value" @retry="catalog.load" @refresh="catalog.load" />
   </section>
 </template>
 
 <style scoped>
+
 .data-center-panel { display: grid; grid-template-columns: clamp(380px, 33vw, 460px) minmax(0, 1fr); height: 100%; min-height: 560px; padding: 26px 28px 24px; }
 .data-center-panel__filters { position: relative; display: flex; flex-direction: column; gap: 24px; min-width: 0; min-height: 0; padding-right: 28px; overflow: auto; scrollbar-width: thin; }
 .data-center-panel__filters::after { position: absolute; top: 0; bottom: 0; right: 0; width: 1px; content: ''; pointer-events: none; background: linear-gradient(transparent, #91a59833 8%, #91a59833 92%, transparent); }

@@ -54,6 +54,7 @@ function preserveLeavingPosition(element) {
   <section class="platform-overview" aria-label="平台概览" :aria-busy="snapshot?.isRefreshing || false">
     <header class="platform-overview__header">
       <!-- Checkbox adapted from Uiverse.io by byllzz, supplied by the user. -->
+      <div class="platform-overview__actions">
       <label class="platform-select-all" :class="{ 'is-disabled': !platforms.length }">
         <span class="platform-select-all__control">
           <input type="checkbox" aria-label="全选平台" :checked="allSelected" :indeterminate.prop="partlySelected" :disabled="!platforms.length" @change="$emit('select-all-platforms', $event.target.checked)" />
@@ -61,6 +62,8 @@ function preserveLeavingPosition(element) {
         </span>
         <span class="platform-select-all__label">全选</span>
       </label>
+      <slot name="actions" />
+      </div>
       <p class="platform-overview__plan">
         <span>下次同步</span>
         <span class="platform-overview__countdown">{{ countdownText }}</span>
@@ -82,9 +85,10 @@ function preserveLeavingPosition(element) {
 
 <style scoped>
 .platform-overview { --platform-card-width: 136px; --platform-folder-width: 110px; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 0; }
-.platform-overview__header { display: flex; align-items: center; justify-content: space-between; gap: 12px; height: 32px; flex: 0 0 32px; }
-.platform-overview__plan { display: grid; grid-template-columns: auto 72px; align-items: center; justify-content: end; gap: 8px; flex: 0 0 160px; width: 160px; height: 24px; margin: 0; color: #89938d; font-size: 11px; line-height: 16px; white-space: nowrap; }
-.platform-select-all { margin-inline-start: calc((var(--platform-card-width) - var(--platform-folder-width)) / 2); display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; cursor: pointer; user-select: none; }
+.platform-overview__header { display: flex; align-items: center; justify-content: space-between; gap: 10px 12px; flex-wrap: wrap; min-height: 34px; flex: 0 0 auto; }
+.platform-overview__plan { display: grid; grid-template-columns: auto 72px; align-items: center; justify-content: end; gap: 8px; flex: 0 0 160px; width: 160px; height: 24px; margin: 0 0 0 auto; color: #89938d; font-size: 11px; line-height: 16px; white-space: nowrap; }
+.platform-overview__actions { display: flex; align-items: center; gap: 14px; margin-inline-start: calc((var(--platform-card-width) - var(--platform-folder-width)) / 2); }
+.platform-select-all { display: inline-flex; align-items: center; gap: 10px; flex-shrink: 0; cursor: pointer; user-select: none; }
 .platform-select-all__control { position: relative; display: block; width: 1.5em; height: 1.5em; font-size: 16px; }
 .platform-select-all input { position: absolute; z-index: 1; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
 .platform-select-all__label { color: #606d64; font-size: 12px; }
@@ -105,7 +109,7 @@ function preserveLeavingPosition(element) {
   100% { transform: scale(1) rotate(40deg); opacity: 1; }
 }
 .platform-overview__countdown { width: 72px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; text-align: right; }
-.platform-overview__body { display: grid; flex: 1 1 auto; min-height: 0; margin-top: 8px; }
+.platform-overview__body { display: grid; flex: 1 1 auto; min-height: 0; margin-top: 20px; }
 .platform-overview__list { position: relative; display: grid; grid-template-columns: repeat(auto-fill, minmax(var(--platform-card-width), 1fr)); align-content: start; grid-area: 1 / 1; gap: 6px; min-height: 0; margin: 0; padding: 0 0 8px; overflow: auto; list-style: none; -webkit-mask-image: linear-gradient(180deg, transparent, #000 12px, #000 calc(100% - 16px), transparent); mask-image: linear-gradient(180deg, transparent, #000 12px, #000 calc(100% - 16px), transparent); }
 .platform-overview__list li { flex: 0 0 var(--platform-card-width); }
 .platform-overview__empty { display: flex; grid-area: 1 / 1; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 140px; color: #9aa49d; pointer-events: none; }

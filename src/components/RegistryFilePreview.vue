@@ -24,15 +24,20 @@ function closed() { displayedFile.value = null; contentDisplayed.value = false }
     <FileRenderer v-if="displayedFile" :key="displayedFile.id || displayedFile.url" :file="displayedFile" @loading="contentDisplayed = false" @displayed="contentDisplayed = true" />
     <Transition name="preview-tools"><div v-if="displayedFile && file && contentDisplayed" class="preview-tools">
     <FileSummaryPopover v-if="displayedFile" :key="displayedFile.id || displayedFile.url" :summary="displayedFile.summary" :active="Boolean(file)" />
-    <FileInfoPopover v-if="displayedFile && displayedFile.passport !== undefined" :key="`passports-${displayedFile.id || displayedFile.url}`" title="通行证" trigger-label="查看文件通行证" :active="Boolean(file)" secondary>
+    <FileInfoPopover v-if="displayedFile && displayedFile.passport !== undefined" :key="`passports-${displayedFile.id || displayedFile.url}`" title="通行证" trigger-label="查看文件通行证" :active="Boolean(file)" :position="1">
       <template #icon><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v5a2 2 0 0 0 0 4v5H4v-5a2 2 0 0 0 0-4V5ZM9 5v3m0 3v2m0 3v3M13 10h3m-3 4h3" /></svg></template>
       <PassportValues :values="displayedFile.passport" />
+    </FileInfoPopover>
+    <FileInfoPopover v-if="displayedFile.fileLevel !== undefined" :key="`level-${displayedFile.id || displayedFile.url}`" title="文件等级" trigger-label="查看文件等级" :active="Boolean(file)" :position="displayedFile.passport !== undefined ? 2 : 1">
+      <template #icon><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16M6 16v-4h3v4M11 16V8h3v8M16 16V4h3v12" /></svg></template>
+      <span v-if="displayedFile.fileLevel !== null" class="preview-file-level">{{ displayedFile.fileLevel }}</span><span v-else>暂无文件等级</span>
     </FileInfoPopover>
     </div></Transition>
   </FilePreviewDialog>
 </template>
 
 <style scoped>
+.preview-file-level { color: #466483; font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .preview-tools { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
 .preview-tools :deep(.file-info) { pointer-events: auto; }
 .preview-tools-enter-active { transition: opacity .32s ease, transform .36s cubic-bezier(.22, 1, .36, 1); }

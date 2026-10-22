@@ -1,3 +1,12 @@
+import registryLogoUrl from '../assets/platforms/registry.webp'
+import contractLogoUrl from '../assets/platforms/contract.webp'
+
+// 与知识沉淀统一入口沿用相同的平台标识和图标资源。
+const PLATFORM_LOGOS = Object.freeze({ registry: registryLogoUrl, 'contract-pheno': contractLogoUrl })
+export function platformLogoUrl(code) {
+  return Object.hasOwn(PLATFORM_LOGOS, code) ? PLATFORM_LOGOS[code] : null
+}
+
 // 每组依次为背板深色、封面底色、封面高光；可集中调整文件夹配色。
 export const FOLDER_COVER_PALETTE = Object.freeze([
   ['#bd853c', '#dca64e', '#edc578'], // 蜂蜜金

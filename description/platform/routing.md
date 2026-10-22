@@ -1,40 +1,39 @@
 # 页面路由
 
-本项目使用 Vue Router 4 的 HTML5 History 模式，参照 `contract-service-fe` 通过独立路由组织页面。环境路径与开发映射见[环境与部署](deployment.md)，会话契约见[登录与后端鉴权](authentication.md)。
+本项目使用 Vue Router 4 的 HTML5 History 模式，三个工作台分区共用外框，以单个路由出口及 KeepAlive 缓存切换。共享 token 约定及错误回退见[访问凭据与鉴权](authentication.md)，环境路径见[环境与部署](deployment.md)。
 
 ## 页面与地址
 
-路由定义集中在 [`src/router.js`](../../src/router.js)，环境前缀来自 Vite 的 `BASE_URL`，不在页面组件中拼接。
+路由集中在 [`src/router.js`](../../src/router.js)，页面前缀使用 Vite 的 `BASE_URL`。
 
-| 页面 | 路由 | 开发域名地址 | 生产域名地址 |
+| 页面 | 路由 | 开发地址 | 构建部署地址 |
 | --- | --- | --- | --- |
-| 登录 | `/login` | `https://pheno.szkl.com/dev/registry/login` | `https://pheno.szkl.com/registry/login` |
-| 数据中心 | `/data-center` | `https://pheno.szkl.com/dev/registry/data-center` | `https://pheno.szkl.com/registry/data-center` |
-| 审核广场 | `/review-square` | `https://pheno.szkl.com/dev/registry/review-square` | `https://pheno.szkl.com/registry/review-square` |
-| 人员管理 | `/personnel` | `https://pheno.szkl.com/dev/registry/personnel` | `https://pheno.szkl.com/registry/personnel` |
+| 数据中心 | `/data-center` | `/dev/knowledge-accumulation/registry/data-center` | `/knowledge-accumulation/registry/data-center` |
+| 审核广场 | `/review-square` | `/dev/knowledge-accumulation/registry/review-square` | `/knowledge-accumulation/registry/review-square` |
+| 人员管理 | `/personnel` | `/dev/knowledge-accumulation/registry/personnel` | `/knowledge-accumulation/registry/personnel` |
 
-基础入口 `/` 和未知页面地址跳转到数据中心，由登录守卫决定是否先进入登录页。本机开发使用相同的 `/dev/registry/` 前缀与 `23080` 端口。
+基础入口、未知地址及原 `/login` 地址统一跳转数据中心；`/workspace` 保留查询与锚点并跳转数据中心。已移除登录页和登录守卫，不会重定向到登录表单。进入后由根组件检查共享 token 是否存在，业务权限和有效性由后端接口判断。
 
-旧 `/workspace` 地址会跳转到数据中心，并保留查询参数与锚点；它用于兼容已有书签。审核广场已完成[三栏布局和类型导航](../features/review-square.md)，人员管理当前保留空白内容区域。
+## 组件与进入过程
 
-## 组件职责
+[`App.vue`](../../src/App.vue) 在路由就绪前挂载分子背景和透明加载层。存在共享 token 时挂载工作台，准备中的页面隐藏且不可交互；首屏数据、图标及渲染就绪后淡入。缺少 token、401 或 403 时改为显示返回知识沉淀入口的页面，具体文案与返回路径由[鉴权专题](authentication.md#缺少凭据失效与无权限)维护。
 
-[`App.vue`](../../src/App.vue) 保留全局分子背景和路由出口，切换页面时不重复创建背景 Worker。同时保留登录页直至目标工作台首屏就绪，准备中的工作台保持挂载、隐藏且不可交互。登录表单与请求状态由 [`LoginView.vue`](../../src/views/LoginView.vue) 管理。
-
-[`WorkspaceLayout.vue`](../../src/layouts/WorkspaceLayout.vue) 承载注册中心外框、品牌、路由导航、账户名称、审核记录与退出入口；内部使用嵌套路由的三个命名视图组成连续滑动轨道，数据中心由 [`WorkspaceView.vue`](../../src/views/WorkspaceView.vue) 呈现。三个页面在切换时保持挂载，当前路由决定轨道位置与可交互页面。数据中心采用左右布局，左侧展示平台及条件筛选，右侧为文件列表；布局及交互见[注册中心导航与数据中心](../features/workspace.md)。
-
-## 登录守卫
-
-进入三个受保护的页面路由时检查本地会话。没有凭据则跳转登录页，保存原路由的路径、查询参数与锚点；认证成功后使用 `replace` 返回该地址。返回目标必须是本应用的受保护页面，否则进入数据中心。路由切换先用于后台挂载目标页面，视觉进入等待首屏加载、图标解码和渲染就绪；具体等待及失败策略见[登录流程](authentication.md#登录流程)。已有会话访问登录页时进入数据中心。
-
-退出清除会话并用 `replace` 返回登录页；浏览器返回或再次直达注册中心都会重新执行守卫。受保护接口返回 `401` 时进入带失效提示的登录页，重新认证后恢复原目标。守卫只判断是否存在本地凭据，后端仍负责验证免登码是否有效。
+[`WorkspaceLayout.vue`](../../src/layouts/WorkspaceLayout.vue) 承载品牌、路由导航、账户名称、审核记录和返回入口。子路由各自对应一个页面组件，通过 `RouterView` 插槽、`KeepAlive`（最多 3 个实例）和 `Transition` 组合切换，以路由名称作为缓存键。页面首次访问时创建，离开后停用并移出活动 DOM，返回时复用原实例；刷新或离开应用清除缓存。工作台及业务页面通过异步路由导入；首次模块加载或路由初始化失败提供重新加载入口。
 
 ## 刷新与部署
 
-History 模式的深层地址需要服务器回退到页面 HTML。Vite 开发服务与生产 Nginx 均已支持这一行为：`/login`、`/data-center`、`/review-square`、`/personnel` 可直接访问和刷新。开发映射服务器去掉 `/dev` 后，现有适配会恢复前缀，浏览器路由与资源地址继续保留 `/dev/registry/`。
+History 深层页面需要服务器回退到 HTML。Vite 源码服务使用 `/dev/knowledge-accumulation/registry/`，构建预览和 Nginx 使用 `/knowledge-accumulation/registry/`，模块、图片、PDF.js 和 WebSocket 跟随页面基础路径。开发 API 以 `/dev/knowledge-accumulation/registry/api/` 请求，Vite 代理仅移除 `/dev`；构建部署的 API 原样转发。认证均使用共享 token，没有开发账号或钉钉登录模式。
 
-API 与缺失静态资源按各自规则处理，不回退到页面。生产网关保留 `/registry/` 转发给前端容器，具体配置见[环境与部署](deployment.md)。
+共享存储只在同源内可见，域名开发入口应与统一入口使用相同协议、主机和端口。网关路由与运行方式见[环境与部署](deployment.md)。
 
-验证使用 `npm test`、`npm run build` 及部署专题中的隔离容器检查，覆盖守卫、登录返回目标、开发映射与生产深层路径回退；浏览器检查登录、刷新、审核记录和退出后返回。
+## 页面缓存与生命周期
 
-[查看注册中心实测截图](../assets/screenshots/registry-center-desktop.jpg)，账户为隔离测试身份。
+数据中心、审核广场及人员管理使用 [`useWorkspacePage()`](../../src/composables/useWorkspacePage.js) 管理激活状态及滚动位置。路由切换立即将离开页设为非活动，业务读取根据此状态停止，关闭预览及人员权限弹窗；停用页面不会销毁组件，也不会取消已发出的审核决定、文件等级更新或组织架构刷新。返回后保留筛选、选中项、页面内草稿与已加载数据，恢复页面及嵌套滚动容器位置。真正卸载时按原逻辑释放请求、事件、图像及阅读器资源。
+
+导航按数据中心、审核广场、人员管理顺序决定滑动方向；向后项进入时由右侧滑入，向前项进入时由左侧滑入，浏览器前进／后退使用同样规则。动画期间离开页不可交互，完成后仅当前页面留在活动 DOM；减少动画偏好下直接切换。
+
+KeepAlive 仅缓存组件实例；“首次成功加载后复用、手动刷新才查询”的请求规则继续由业务 composable 执行，失败及中断不当作成功缓存。缓存不写入持久存储，数据更新与凭据变化的处理见对应功能专题。
+
+## 验证
+
+使用独立无头 Chrome 和正式 FastAPI 路由的隔离依赖验证三个工作台的直接访问与首屏准备、页面实例缓存及停用后离开活动 DOM、筛选／审核草稿／嵌套滚动位置恢复，以及切换时无额外业务 GET。正常动画下验证方向、浏览器后退及快速连续切换；减少动画及 390px 窄屏均保持可用。切走页面期间，入库审核、文件等级调整和组织架构刷新仍能完成并在返回后回显；人员权限弹窗在离开时关闭。未操作真实业务数据。

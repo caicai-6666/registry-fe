@@ -2,7 +2,8 @@ name: registry-frontend
 
 services:
   frontend:
-    build: .
+    build:
+      context: .
     image: registry-fe:local
     environment:
       BACKEND_UPSTREAM: ${BACKEND_UPSTREAM:-backend:8000}

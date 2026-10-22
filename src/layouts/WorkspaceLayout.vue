@@ -1,22 +1,30 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { createPlatformDirectory, PLATFORM_DIRECTORY_KEY } from '../services/platformDirectory.js'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { createPlatformDirectory, PLATFORM_DIRECTORY_KEY, PLATFORM_REFRESH_KEY } from '../services/platformDirectory.js'
 import ReviewHistoryDialog from '../components/ReviewHistoryDialog.vue'
 import logoUrl from '../assets/logo.webp'
 import mailboxUrl from '../assets/mailbox.webp'
-import { clearAuthSession, getAuthSession } from '../services/registryApi.js'
+import { fetchCurrentUser, getAccessToken, KNOWLEDGE_ENTRY_PATH } from '../services/registryApi.js'
 
 const emit = defineEmits(['mailbox-change', 'ready'])
-const router = useRouter()
 const route = useRoute()
-const session = getAuthSession()
+const userName = ref('')
+const identityController = new AbortController()
+onMounted(() => {
+  const token = getAccessToken()
+  void fetchCurrentUser({ signal: identityController.signal }).then(user => {
+    if (getAccessToken() === token) userName.value = user.username.trim()
+  }).catch(() => { /* 用户资料失败不阻塞业务，401/403 由统一入口处理。 */ })
+})
+onBeforeUnmount(() => identityController.abort())
 const mailboxOpen = ref(false)
 const platformDirectory = createPlatformDirectory()
 const platformSnapshot = platformDirectory.state
 provide(PLATFORM_DIRECTORY_KEY, platformSnapshot)
+provide(PLATFORM_REFRESH_KEY, () => platformDirectory.refresh())
 function updatePlatformMonitoring() {
-  if ((['data-center', 'review-square'].includes(route.name) || mailboxOpen.value) && document.visibilityState !== 'hidden') {
+  if ((['data-center', 'review-square', 'personnel'].includes(route.name) || mailboxOpen.value) && document.visibilityState !== 'hidden') {
     void platformDirectory.start().then(() => { platformsReady = true; void revealWhenReady() })
   }
   else platformDirectory.stop()
@@ -25,10 +33,9 @@ watch([() => route.name, mailboxOpen], updatePlatformMonitoring)
 onMounted(() => { document.addEventListener('visibilitychange', updatePlatformMonitoring); updatePlatformMonitoring() })
 onBeforeUnmount(() => { document.removeEventListener('visibilitychange', updatePlatformMonitoring); platformDirectory.stop() })
 const workspaceElement = ref(null)
-const initialPage = route.name
 let disposed = false
-let pageReady = initialPage === 'personnel'
-let platformsReady = initialPage === 'personnel'
+let pageReady = false
+let platformsReady = false
 let revealing = false
 let imageTimer
 function handleInitialReady() { pageReady = true; void revealWhenReady() }
@@ -60,16 +67,13 @@ const navigationItems = [
   { name: 'personnel', label: '人员管理' },
 ]
 const activeSection = computed(() => Math.max(0, navigationItems.findIndex(item => item.name === route.name)))
+const pageTransition = ref('workspace-slide-forward')
+watch(activeSection, (index, previous) => { pageTransition.value = index >= previous ? 'workspace-slide-forward' : 'workspace-slide-backward' }, { flush: 'sync' })
 
 watch(mailboxOpen, open => emit('mailbox-change', open), { flush: 'sync' })
 watch(() => route.fullPath, () => { mailboxOpen.value = false })
 onBeforeUnmount(() => emit('mailbox-change', false))
 
-function logout() {
-  mailboxOpen.value = false
-  clearAuthSession()
-  router.replace({ name: 'login' })
-}
 </script>
 
 <template>
@@ -94,7 +98,7 @@ function logout() {
         </nav>
 
         <div class="workspace__identity">
-          <span class="workspace__user" :title="session.userName">{{ session.userName }}</span>
+          <span v-if="userName" class="workspace__user" :title="userName">{{ userName }}</span>
           <button
             type="button"
             class="workspace__mailbox"
@@ -106,26 +110,27 @@ function logout() {
           >
             <img :src="mailboxUrl" alt="" draggable="false" />
           </button>
-          <button
-            type="button"
-            class="workspace__logout"
-            aria-label="退出登录"
-            title="退出登录"
-            @click="logout"
+          <a
+            :href="KNOWLEDGE_ENTRY_PATH"
+            class="workspace__return"
+            aria-label="返回知识沉淀"
+            title="返回知识沉淀"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M9 7 4 12l5 5M4 12h11M14 5h4a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-4" />
             </svg>
-          </button>
+          </a>
         </div>
       </header>
 
       <div class="workspace__content" role="region" :aria-label="`${route.meta.title}内容`">
-        <div class="workspace-route-track" :style="{ transform: `translate3d(-${activeSection * 100}%, 0, 0)` }">
-          <section v-for="(item, index) in navigationItems" :key="item.name" class="workspace-route-panel" :aria-label="item.label" :aria-hidden="activeSection !== index" :inert="activeSection !== index">
-            <RouterView :name="item.name" :active="activeSection === index" @initial-ready="handleInitialReady" />
-          </section>
-        </div>
+        <RouterView v-slot="{ Component, route: pageRoute }">
+          <Transition :name="pageTransition" @before-enter="element => { element.inert = false }" @before-leave="element => { element.inert = true }" @leave-cancelled="element => { element.inert = false }">
+            <KeepAlive :max="3">
+              <component :is="Component" :key="pageRoute.name" @initial-ready="handleInitialReady" />
+            </KeepAlive>
+          </Transition>
+        </RouterView>
       </div>
     </section>
   </Transition>

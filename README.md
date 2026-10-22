@@ -6,23 +6,21 @@
 
 | 功能 | 当前实现 |
 | --- | --- |
-| 登录与账户 | 使用后端人员密钥登录，显示后端账户名称，支持标签页会话与退出。登录成功后保留加载状态，等待工作台首屏数据、图标及渲染就绪再进入。 |
+| 访问与账户 | 直接读取同域 `localStorage.access_token` 调用业务接口，不提供登录页或钉钉免登；账户资料并行读取。首屏准备期间展示五色竖条与分子背景，就绪后淡入工作台。 |
 | 数据中心 | 左侧为平台同步、平台选择及条件筛选，右侧为文件列表；文件按入库时间降序、按入库年月分组，右上角可刷新目录。 |
 | 文件筛选 | 支持平台、入库日期、通行证前缀、文件名、摘要、申请人和审核人组合过滤。文本输入失焦后生效，提示随输入更新；重置清空全部条件。 |
 | 文件预览 | 根据原件类型展示 PDF、音频或视频，内容显示后淡入摘要及通行证悬浮入口；下载资源在页面内临时缓存。 |
 | 审核广场 | 入库／删除审核三栏布局，接入正式待审列表、原件预览、必填备注及通过／拒绝提交，包含二次确认、加载反馈与成功退出动画。 |
-| 审核记录 | 查看本人入库及关联删除审核历史；平台优先显示名称，通行证支持多个值。 |
-| 人员管理 | 已提供独立路由，内容暂未实现。 |
+| 审核记录 | 查看本人入库、关联删除审核历史及全体操作人的文件等级变更记录；切换复用缓存，平台优先显示名称。 |
+| 人员管理 | 顶部提供用户名、部门与管理员联合筛选，下方展示头像、用户名和部门；已接入正式人员、部门和平台接口，管理员按 userid 关联；点击成员卡片可预览编辑各平台等级与管理员身份，权限更新接口暂未接入。 |
 
-平台列表包含全部非自身平台及在线／离线状态，按后端下次同步计划更新。页面使用正式接口，不包含业务 mock 或固定登录密码。三个工作台页面通过路由切换并保持挂载，保留各自的页面内状态；刷新或退出后不保留筛选与未提交草稿。
+入库审核支持 0–100 文件等级滑动条与数值输入，双向同步；通过时提交等级，拒绝时不提交。审核广场另提供“文件等级调整”，支持目录筛选和逐项等级编辑，已接入等级更新接口及未确认结果重试。详情见[审核广场](description/features/review-square.md#文件入库审核)。
+
+平台列表包含全部非自身平台及在线／离线状态，按后端下次同步计划更新。数据中心、入库审核及删除审核使用正式接口。人员管理已接入正式用户、部门及头像接口；项目不提供固定登录密码。三个工作台通过单个路由出口与 KeepAlive 缓存切换，保留各自的筛选、滚动位置和页面内状态；刷新或离开应用后不保留筛选与未提交草稿。
 
 ## 页面预览
 
 以下为当前代码的桌面实际渲染截图（1440 × 1000），使用隔离后端、测试身份及测试文件，不代表生产数据。
-
-### 登录页
-
-![知识沉淀注册中心登录页](description/assets/screenshots/current-login-desktop.webp)
 
 ### 数据中心
 
@@ -36,6 +34,12 @@
 
 ![审核广场入库申请详情](description/assets/screenshots/current-review-square-desktop.webp)
 
+### 人员管理
+
+顶部提供用户名、部门及管理员联合筛选，下方展示用户卡片；已接入正式人员、部门及头像接口。
+
+![人员管理筛选与用户卡片](description/assets/screenshots/current-personnel-desktop.webp)
+
 ## 本地运行
 
 ```bash
@@ -43,11 +47,12 @@ npm ci
 npm run dev
 ```
 
-- 本机入口：`http://127.0.0.1:23080/dev/registry/`
-- 开发域名入口：`https://pheno.szkl.com/dev/registry/`
+- 本机入口：`http://127.0.0.1:23080/dev/knowledge-accumulation/registry/`
+- 开发域名入口：`https://pheno.szkl.com/dev/knowledge-accumulation/registry/`
+- 构建部署入口：`https://pheno.szkl.com/knowledge-accumulation/registry/`
 - 默认后端：`http://127.0.0.1:23000`
 
-Vite 允许 `pheno.szkl.com` 的 Host 请求，并兼容现有映射服务器去除 `/dev` 的转发方式。需要修改后端地址时，复制 `.env.example` 为 `.env.local`，设置 `REGISTRY_BACKEND_URL`。登录密码使用对应后端配置的人员密钥，真实凭据不得提交至仓库。
+Vite 允许 `pheno.szkl.com` 的 Host 请求，开发映射须完整保留 `/dev/knowledge-accumulation/registry/` 前缀转发至本机 `23080`。需要修改后端地址时，复制 `.env.example` 为 `.env.local`，设置 `REGISTRY_BACKEND_URL`。统一入口需在同源 `localStorage` 的 `access_token` 键保存原始 token，再跳转到注册中心。本项目不需要登录模式、开发 token 或 CorpId 配置；详情见[共享凭据与鉴权](description/platform/authentication.md)。
 
 ## 构建、预览与验证
 
@@ -57,24 +62,23 @@ npm run build
 npm run preview
 ```
 
-构建输出至 `dist/`。`npm run build` 会先同步 PDF.js 运行时资源；当前未配置 Lint 脚本。测试覆盖鉴权、路由、开发映射、平台同步、目录筛选与分月排序、预览缓存及两种审核流程。
+构建输出至 `dist/`。`npm run build` 会先同步 PDF.js 运行时资源；当前未配置 Lint 脚本。`tests/` 已按项目要求排除提交，以下测试基线来自当前本地工作区；新检出仓库不包含这些测试脚本。测试覆盖鉴权、路由、开发映射、平台同步、目录筛选与分月排序、预览缓存及两种审核流程。
 
-当前基线为 **67 项测试通过、生产构建通过**。本次使用独立无头 Chrome 完成桌面登录进入、左右布局、月份分组及审核广场截图检查，并验证输入提示、失焦应用筛选和重置。窄屏与完整动画时序尚未在本轮重新复核。
+当前验证为 **89 项测试通过、生产构建通过**。人员管理使用独立无头 Chrome 与正式 FastAPI 路由的隔离依赖联调，覆盖管理员关联、部门筛选、同名定位、失败重试、空列表、头像加载及 390px 窄屏；不读取真实用户数据库。数据中心与审核广场截图为此前隔离联调记录。
 
 ## 路由与部署
 
 | 页面 | 应用内路径 |
 | --- | --- |
-| 登录 | `/login` |
 | 数据中心 | `/data-center` |
 | 审核广场 | `/review-square` |
 | 人员管理 | `/personnel` |
 
-开发页面前缀为 `/dev/registry/`，生产为 `/registry/`；生产入口约定为 `https://pheno.szkl.com/registry/`。未登录访问受保护页面会进入登录页，认证后恢复有效的原目标地址；旧 `/workspace` 跳转数据中心。
+开发页面前缀为 `/dev/knowledge-accumulation/registry/`，构建预览和容器部署为 `/knowledge-accumulation/registry/`。只区分访问前缀，不配置开发账号或钉钉登录模式。从共享存储读取 token 后直接请求业务接口；缺少凭据、401 或 403 时展示返回知识沉淀入口的按钮，开发返回 `/dev/knowledge-accumulation/`，构建部署返回 `/knowledge-accumulation/`。旧 `/workspace` 及 `/login` 地址进入数据中心。
 
-开发 API 经同源 `/dev/registry/api/` 代理，生产使用 `/registry/api/`。Docker 默认向宿主机 `127.0.0.1:23080` 映射 HTTP 端口，再由外层 HTTPS 网关转发。镜像、后端网络和网关要求见[环境与部署](description/platform/deployment.md)。本仓库配置完成不代表云端已部署。
+开发 API 通过同源 `/dev/knowledge-accumulation/registry/api/` 请求，Vite 代理移除 `/dev`；构建部署使用 `/knowledge-accumulation/registry/api/` 原样代理。Docker 默认向宿主机 `127.0.0.1:23080` 映射 HTTP 端口，再由外层 HTTPS 网关转发。镜像、后端网络和网关要求见[环境与部署](description/platform/deployment.md)。本仓库配置完成不代表云端已部署。
 
-图片图标输出为带内容哈希的独立资源，生产及构建预览支持一年缓存，图片内容变化后使用新 URL；开发模式保留缓存校验与热更新。文件原件的页面内临时缓存与图标 HTTP 缓存相互独立。
+图片图标输出为带内容哈希的独立资源，Nginx 静态服务及构建预览支持一年缓存，图片内容变化后使用新 URL；Vite 源码服务保留缓存校验与热更新。文件原件的页面内临时缓存与图标 HTTP 缓存相互独立。
 
 ## 项目文档
 
@@ -86,8 +90,8 @@ npm run preview
 - [文件展示器与预览缓存](description/features/file-preview.md)
 - [审核广场](description/features/review-square.md)
 - [审核记录](description/features/review-history.md)
-- [页面路由与登录守卫](description/platform/routing.md)
-- [登录与后端鉴权](description/platform/authentication.md)
+- [页面路由与错误回退](description/platform/routing.md)
+- [共享凭据与后端鉴权](description/platform/authentication.md)
 - [环境与部署](description/platform/deployment.md)
 - [开发规范](AGENTS.md)
 

@@ -6,10 +6,32 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f9fa" />
     <meta name="description" content="知识沉淀注册中心工作台" />
+    <link rel="stylesheet" href="/src/loading.css" />
     <title>知识沉淀注册中心</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <div id="registry-startup" role="status" style="display:grid;place-content:center;gap:16px;min-height:100dvh;text-align:center;color:#708378;font:14px system-ui;background:#f7f9fa">
+        <div id="registry-startup-loader" class="registry-loading" aria-hidden="true"><div class="loading"><span></span><span></span><span></span><span></span><span></span></div></div>
+        <span id="registry-startup-message" class="registry-loading__label">正在加载注册中心…</span>
+        <button id="registry-startup-retry" type="button" hidden style="justify-self:center;padding:8px 18px;border:1px solid #ccd8cf;border-radius:8px;background:white;color:#486451;cursor:pointer">重新加载</button>
+      </div>
+    </div>
+    <script>
+      // 模块下载失败时主入口尚未执行，保留可恢复的启动提示。
+      window.addEventListener('error', function (event) {
+        if (!(event.target instanceof HTMLScriptElement)) return;
+        const message = document.getElementById('registry-startup-message');
+        const retry = document.getElementById('registry-startup-retry');
+        if (message && retry) {
+          document.getElementById('registry-startup-loader').hidden = true;
+          message.className = '';
+          message.textContent = '页面资源加载失败，请重试';
+          retry.hidden = false;
+        }
+      }, true);
+      document.getElementById('registry-startup-retry').addEventListener('click', function () { location.reload(); });
+    </script>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,6 +1,7 @@
 <script setup>
 import { onBeforeUnmount, ref, watch } from 'vue'
-const props = defineProps({ label: { type: String, required: true }, confirming: Boolean, disabled: Boolean, loading: Boolean })
+import RaisedActionButton from './RaisedActionButton.vue'
+const props = defineProps({ label: { type: String, required: true }, confirmLabel: { type: String, default: '' }, loadingLabel: { type: String, default: '提交中' }, loadingAriaLabel: { type: String, default: '' }, raised: Boolean, confirming: Boolean, disabled: Boolean, loading: Boolean })
 const emit = defineEmits(['activate'])
 const settling = ref(false)
 let timer
@@ -15,19 +16,20 @@ function activate() {
   if (!props.confirming) settling.value = true
   emit('activate')
 }
+defineExpose({ activate })
 onBeforeUnmount(() => clearTimeout(timer))
 </script>
 <template>
-  <button type="button" class="decision-confirm" :class="{ 'is-confirming': confirming || loading, 'is-loading': loading }" :aria-label="loading ? `正在提交${label}决定` : confirming ? `确认${label}` : label" :disabled="disabled || loading" :aria-disabled="disabled || loading || settling" :aria-busy="loading" @click="activate">
-    <span class="decision-confirm__viewport" aria-hidden="true"><span class="decision-confirm__track"><span>{{ label }}</span><span>确认{{ label }}</span><span class="decision-confirm__loading"><i class="decision-confirm__spinner"></i>提交中</span></span></span>
-  </button>
+  <component :is="raised ? RaisedActionButton : 'button'" type="button" class="decision-confirm" :class="{ 'is-confirming': confirming || loading, 'is-loading': loading }" :aria-label="loading ? (loadingAriaLabel || `正在提交${label}决定`) : confirming ? (confirmLabel || `确认${label}`) : label" :disabled="disabled || loading || settling" :aria-disabled="disabled || loading || settling" :aria-busy="loading" @click="activate">
+    <span class="decision-confirm__viewport" aria-hidden="true"><span class="decision-confirm__track"><span><slot name="icon" />{{ label }}</span><span>{{ confirmLabel || `确认${label}` }}</span><span class="decision-confirm__loading"><i class="decision-confirm__spinner"></i>{{ loadingLabel }}</span></span></span>
+  </component>
 </template>
 <style scoped>
 .decision-confirm { width: 104px; }
 .decision-confirm.is-confirming, .decision-confirm.is-confirming:hover:not(:disabled) { background: #edb34b; border-color: #dda039; color: #684613; box-shadow: 0 4px 10px #bf8b321c; }
 .decision-confirm__viewport { display: block; height: 18px; overflow: hidden; }
 .decision-confirm__track { display: flex; flex-direction: column; transform: translateY(0); transition: transform .42s cubic-bezier(.22, 1, .36, 1); }
-.decision-confirm__track > span { display: flex; flex: none; height: 18px; line-height: 18px; align-items: center; justify-content: center; white-space: nowrap; }
+.decision-confirm__track > span { display: flex; flex: none; height: 18px; line-height: 18px; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; }
 .is-confirming .decision-confirm__track { transform: translateY(-18px); }
 .is-loading .decision-confirm__track { transform: translateY(-36px); }
 .decision-confirm.is-loading:disabled { opacity: 1; }

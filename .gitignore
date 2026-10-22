@@ -1,33 +1,45 @@
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# 仅开放部署必需文件、项目文档及其资源；新增文件类型时需显式补充。
+*
+!*/
 
-node_modules
-dist
-dist-ssr
-*.local
+# 仓库规则、项目说明与部署入口。
+!/.gitignore
+!/.dockerignore
+!/.env.example
+!/AGENTS.md
+!/README.md
+!/Dockerfile
+!/docker-compose.yaml
+!/index.html
+!/nginx.conf
+!/package.json
+!/package-lock.json
+!/vite.config.js
 
-.env
-.env.*
-!.env.example
+# 构建所需的源码、运行图标、配置和资源生成脚本。
+!/src/**/*.vue
+!/src/**/*.js
+!/src/**/*.css
+!/src/assets/**/*.webp
+!/config/*.js
+!/scripts/*.mjs
+!/deploy/*.conf
+
+# 描述文档及页面预览图。
+!/description/**/*.md
+!/description/assets/screenshots/*.jpg
+!/description/assets/screenshots/*.png
+!/description/assets/screenshots/*.webp
+
+# 本地依赖、产物、测试、编辑器和临时目录始终不参与提交。
+node_modules/
+/.vscode/
+/.idea/
 /tests/
+/dist/
+/dist-ssr/
+/coverage/
+/logs/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# 由锁定的 PDF.js 依赖在开发和构建前生成。
-/public/pdfjs/
-/public/.pdfjs-sync-*/
+# PDF.js 资源由锁定依赖在开发和构建前生成，无需保留空目录。
+/public/

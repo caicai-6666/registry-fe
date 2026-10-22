@@ -12,7 +12,7 @@
 
 平台模型的在线状态显示绿色呼吸灯与“在线”，离线状态显示静态灰色圆点与“离线”。呼吸周期为 2.4 秒，亮度和光晕平滑变化；不移动圆点或文字。状态行使用固定高度，只有在线、离线或未知状态真正变化时才执行 240ms 淡入淡出；相同状态的新响应保留原节点和呼吸动画，不重播过渡。减少动画偏好下显示静态绿色圆点并关闭淡入淡出。
 
-过期结果保留旧实体并显示“状态待更新”，不把不可确认的状态伪装为在线或离线。当前列表接口返回全部非自身平台，包含 `is_alive=false` 的离线平台；前端完整保留响应，不按存活状态过滤。某平台不再出现在成功响应中时淡出该实体，新平台淡入，已有平台调整位置时平滑移动；不将缺席推断为平台目录中仍存在但离线。
+过期结果保留旧实体并显示“状态待更新”，不把不可确认的状态伪装为在线或离线。当前列表接口返回全部平台（包括 registry），文件夹展示排除 registry，其余完整保留，包含 `is_alive=false` 的离线平台；前端不按存活状态过滤。某平台不再出现在成功响应中时淡出该实体，新平台淡入，已有平台调整位置时平滑移动；不将缺席推断为平台目录中仍存在但离线。
 
 [查看在线与离线状态的隔离界面样例](../assets/screenshots/platform-status-preview.jpg)。样例展示接口支持的在线和离线两种状态。
 
@@ -36,13 +36,13 @@
 
 [查看绿色全选与打开的文件夹](../assets/screenshots/platform-select-all.jpg)。截图为隔离交互样例。
 
-开发环境与生产环境均从后端读取真实平台列表及同步计划，临时十平台 mock 与开发开关已移除。多平台样式截图仅作为历史视觉预览保留，不表示当前后端返回的平台数量。
+所有启动方式均从后端读取真实平台列表及同步计划，临时十平台 mock 与开发开关已移除。多平台样式截图仅作为历史视觉预览保留，不表示当前后端返回的平台数量。
 
 [查看后端计划调度联调截图](../assets/screenshots/platform-countdown-desktop.jpg)。账户与平台来自真实后端路由的隔离测试配置，不是实际生产数据。
 
 ## 公开平台模型
 
-[`PlatformInfo`](../../src/models/platform.js) 保存 `code`、`name`、`description` 和 `isAlive`，`fromApi()` 将响应字段 `is_alive` 映射为 `isAlive`。只保存公开信息，不保留密钥、令牌或未知扩展字段。模型与列表不可修改，更新时整体替换。
+[`PlatformInfo`](../../src/models/platform.js) 保存 `code`、`name`、`description` 、`isAlive` 和 `admins`，`fromApi()` 将响应字段 `is_alive` 映射为 `isAlive`。`admins` 包含 userid、name 及头像文件名，人员管理按 userid 关联；只保存公开信息，不保留密钥、令牌或未知扩展字段。模型与列表不可修改，更新时整体替换。
 
 `parsePlatformList()` 保留服务端顺序，接受空列表，拒绝重复代号、缺失字段、空白名称或描述、非法代号和错误类型。存活字段必须为布尔值，不接受字符串或数字；任一条目失败不返回部分列表。
 
@@ -56,16 +56,16 @@
 
 | 方法与路径 | 用途 | 成功响应 |
 | --- | --- | --- |
-| `GET /registry/api/platform/list` | 读取全部非自身平台，包含离线平台（`is_alive=false`） | 平台数组，字段为 `code`、`name`、`description`、`is_alive` |
-| `GET /registry/api/platform/sync-time` | 读取下一次计划同步或重试时间 | `{ "next_sync_at": "带时区时间或 null" }` |
+| `GET /knowledge-accumulation/registry/api/platform/list` | 读取全部平台，包含 registry 和离线平台（`is_alive=false`） | 平台数组，字段为 `code`、`name`、`description`、`is_alive`、`admins` |
+| `GET /knowledge-accumulation/registry/api/platform/sync-time` | 读取下一次计划同步或重试时间 | `{ "next_sync_at": "带时区时间或 null" }` |
 
-两个接口均通过 [`registryApiRequest()`](../../src/services/registryApi.js) 使用 Bearer 人员免登码 `login_code`，请求无 Body，禁止缓存。开发路径使用同源 `/dev/registry/api/`，代理去掉 `/dev` 后到达后端；生产使用同源 `/registry/api/`。不调用早先撤回的中间件列表地址，不在浏览器持有平台凭据。
+两个接口均通过 [`registryApiRequest()`](../../src/services/registryApi.js) 使用 Bearer 用户 `access_token`，请求无 Body，禁止缓存。开发请求使用同源 `/dev/knowledge-accumulation/registry/api/`，Vite 代理移除 `/dev`；构建部署使用同源 `/knowledge-accumulation/registry/api/`。不调用早先撤回的中间件列表地址，不在浏览器持有平台凭据。
 
 列表接口返回 `503` 时说明目录不可用或过期，前端保留上次结果并标记未知；不能伪装成空列表。同步时间接口的 `200` 不代表平台列表可用。`next_sync_at` 是计划时间，不是完成时间或上次成功同步时间，null 可能表示正在同步，也可能表示未启用或没有后续计划。
 
 ## 按后端计划调度
 
-[`createPlatformDirectory()`](../../src/services/platformDirectory.js) 提供只读 Vue 响应式快照：平台列表、前端最后成功读取时间 `updatedAt`、后台计划 `nextSyncAt`、过期标记、刷新状态和列表／调度错误。`updatedAt` 仅是前端读取时间，不作为后端同步完成时间。
+[`createPlatformDirectory()`](../../src/services/platformDirectory.js) 提供只读 Vue 响应式快照：排除 registry 的 `platforms`、包含 registry 的 `allPlatforms`、前端最后成功读取时间 `updatedAt`、后台计划 `nextSyncAt`、过期标记、刷新状态和列表／调度错误。`updatedAt` 仅是前端读取时间，不作为后端同步完成时间。
 
 目录由 `WorkspaceLayout.vue` 统一持有，数据中心和审核记录共享；进入可见的数据中心、审核广场或在其他页面打开审核记录时查询列表与计划。有未来计划时，使用单次计时器在计划时间后 1 秒检查计划，给后台同步留出缓冲；收到新的未来计划后再读列表。正常同步期间保留现有实体和显示状态，不因为请求开始就标记过期或展示进度提示；列表接口明确失败或目录过期时才保留旧实体并标记未知。
 
@@ -73,7 +73,7 @@
 
 进行中的查询复用同一请求，重复启动不累积计时器或请求。长时间计划分段等待，避免计时器溢出。调度与倒计时使用浏览器系统时间，系统时钟应正确；后台标签页的浏览器调度可能延迟执行，恢复可见时重新读取计划和列表，并按实际时间差恢复倒计时。
 
-离开数据中心和审核广场且审核记录未打开、标签页隐藏、退出或布局卸载时停止计时器并取消请求，保留内存中的旧实体；返回或恢复可见时重新获取。任一接口 `401` 停止调度，由已有鉴权流程转到登录页。旧请求即使迟到，也不能覆盖停止或重启后的状态。
+离开数据中心和审核广场且审核记录未打开、标签页隐藏、退出或布局卸载时停止计时器并取消请求，保留内存中的旧实体；返回或恢复可见时重新获取。任一接口 `401` 停止调度，由鉴权处理展示失效提示及返回统一入口按钮。旧请求即使迟到，也不能覆盖停止或重启后的状态。
 
 旧 `VITE_PLATFORM_POLL_INTERVAL_SECONDS`、Docker 构建参数和运行时 `setIntervalSeconds()` 已移除，无需为探测间隔重启前端或重建镜像。后台同步与重试周期由后端负责，前端仅读取其计划。
 
@@ -82,3 +82,5 @@
 `npm test` 覆盖公开模型、时间响应、Bearer 路径、按计划更新、空列表、后台正在同步、计划异常退避、过期结果、请求去重、取消与晚到响应、401、长计划及平台选择的保留与清理。`npm run build` 验证产物。浏览器检查悬停不打开、点击与键盘切换、全选／取消全选和部分选中状态。
 
 使用 `tests/backend_fixture.py` 可验证真实 FastAPI 路由、人员认证、开发代理与浏览器更新链路。设置 `REGISTRY_TEST_PLATFORMS=1` 启用隔离目录样例；测试专用场景路由仅存在于该实例，不装配到正式后端。隔离实例使用另一个 `REGISTRY_TEST_PORT`，不能占用用户的真实后端端口。
+
+前端在平台列表解析后统一排除 `code === "registry"` 的注册中心自身平台，保留其他平台的原始顺序与在线／离线状态。平台概览、全选和来源平台筛选均使用排除后的共享目录；后续同步同样应用该规则。

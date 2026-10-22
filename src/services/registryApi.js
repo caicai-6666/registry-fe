@@ -1,10 +1,10 @@
-// 与页面公开基础路径一致：开发经 /dev 映射，生产使用 /registry。
-export const REGISTRY_API_BASE_PATH = `${import.meta.env?.DEV ? '/dev' : ''}/registry/api`
+// 公开路径跟随页面基础路径；开发的 /dev 前缀由 Vite 代理移除。
+const PUBLIC_BASE_PATH = import.meta.env?.BASE_URL || '/knowledge-accumulation/registry/'
+export const REGISTRY_API_BASE_PATH = `${PUBLIC_BASE_PATH}api`
+export const ACCESS_DENIED_EVENT = 'registry-access-denied'
+export const KNOWLEDGE_ENTRY_PATH = PUBLIC_BASE_PATH.slice(0, -'registry/'.length)
 export const AUTH_EXPIRED_EVENT = 'registry-auth-expired'
-const AUTH_STORAGE_KEY = REGISTRY_API_BASE_PATH.startsWith('/dev/')
-  ? 'registry-development-reviewer-session.v1' : 'registry-reviewer-session.v1'
 const REQUEST_TIMEOUT_MS = 15000
-let memorySession = null
 
 export class RegistryApiError extends Error {
   constructor(message, status = 0) {
@@ -14,43 +14,13 @@ export class RegistryApiError extends Error {
   }
 }
 
-function normalizeSession(value) {
-  if (!value || typeof value !== 'object') return null
-  const loginCode = typeof value.loginCode === 'string' ? value.loginCode.trim() : ''
-  const userName = typeof value.userName === 'string' ? value.userName.trim() : ''
-  return loginCode && userName ? { loginCode, userName } : null
-}
-
-export function getAuthSession() {
-  if (memorySession) return memorySession
+// 统一入口负责登录和 token 生命周期；每次请求读取最新共享值。
+export function getAccessToken() {
   try {
-    // 旧 mock 会话不能作为真实登录凭据恢复。
-    sessionStorage.removeItem('registry.mock-auth-session.v1')
-    memorySession = normalizeSession(JSON.parse(sessionStorage.getItem(AUTH_STORAGE_KEY)))
-    if (!memorySession) sessionStorage.removeItem(AUTH_STORAGE_KEY)
+    const token = localStorage.getItem('access_token')
+    return typeof token === 'string' && /^[\x21-\x7e]+$/.test(token) ? token : null
   } catch {
-    // 会话存储不可用时使用页面内存。
-    try { sessionStorage.removeItem(AUTH_STORAGE_KEY) } catch {}
-  }
-  return memorySession
-}
-
-function saveAuthSession(session) {
-  memorySession = session
-  try {
-    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session))
-  } catch {
-    // 不保存原始人员密钥；存储不可用时刷新需重新登录。
-  }
-  return session
-}
-
-export function clearAuthSession() {
-  memorySession = null
-  try {
-    sessionStorage.removeItem(AUTH_STORAGE_KEY)
-  } catch {
-    // 内存会话已清除，存储限制不阻断退出。
+    return null
   }
 }
 
@@ -65,7 +35,7 @@ function apiPath(path) {
   return `${url.pathname}${url.search}`
 }
 
-async function requestJson(path, { signal, parseJson, ...init } = {}, binary = false) {
+async function requestJson(path, { signal, parseJson, timeoutMs = REQUEST_TIMEOUT_MS, cache = 'no-store', ...init } = {}, binary = false) {
   const url = apiPath(path)
   const controller = new AbortController()
   let timedOut = false
@@ -75,10 +45,10 @@ async function requestJson(path, { signal, parseJson, ...init } = {}, binary = f
   const timer = setTimeout(() => {
     timedOut = true
     controller.abort()
-  }, REQUEST_TIMEOUT_MS)
+  }, timeoutMs)
 
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal, cache: 'no-store' })
+    const response = await fetch(url, { ...init, signal: controller.signal, cache })
     let payload
     if (binary && response.ok) {
       const mediaType = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()
@@ -103,41 +73,44 @@ async function requestJson(path, { signal, parseJson, ...init } = {}, binary = f
 }
 
 function responseError(response, payload) {
-  const fallback = response.status === 401 ? '审核用户密钥无效'
-    : response.status === 422 ? '密钥格式不正确，请检查后重试'
+  const fallback = response.status === 401 ? '登录凭据无效或已过期'
+    : response.status === 403 ? '暂无注册中心访问权限'
+    : response.status === 422 ? '请求参数格式不正确，请重试'
       : `注册中心服务暂时不可用（${response.status}）`
-  const detail = typeof payload?.detail === 'string' ? payload.detail.trim() : ''
-  return new RegistryApiError(detail || fallback, response.status)
+  const detail = typeof payload?.detail === 'string' ? payload.detail.trim() : typeof payload?.detail?.message === 'string' ? payload.detail.message.trim() : ''
+  const error = new RegistryApiError(detail || fallback, response.status)
+  error.detail = payload?.detail
+  return error
 }
 
-export async function loginWithSecretKey(secretKey, { signal } = {}) {
-  const { response, payload } = await requestJson('/auth/login', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ secret_key: secretKey }),
-    signal,
-  })
-  if (!response.ok) throw responseError(response, payload)
-  if (signal?.aborted) throw new DOMException('登录已取消', 'AbortError')
-  const session = normalizeSession({ loginCode: payload?.login_code, userName: payload?.user_name })
-  if (!session) throw new RegistryApiError('登录服务返回了无效的会话信息', response.status)
-  return saveAuthSession(session)
+export async function fetchCurrentUser({ signal } = {}) {
+  const user = await registryApiRequest('/auth/me', { method: 'GET', signal })
+  if (typeof user?.userid !== 'string' || !user.userid.trim() || typeof user.username !== 'string' || !user.username.trim()) {
+    throw new RegistryApiError('身份服务返回了无效的用户资料')
+  }
+  return Object.freeze({ userid: user.userid, username: user.username })
 }
 
-// 后续 JSON 业务接口通过此入口携带免登码，避免将凭据发到其他平台。
+// 业务接口使用统一入口签发的用户 access_token，凭据仅发送到注册中心 API。
 async function authenticatedRequest(path, init = {}, binary = false) {
-  const session = getAuthSession()
-  if (!session) throw new RegistryApiError('登录状态已失效，请重新登录', 401)
+  const accessToken = getAccessToken()
+  if (!accessToken) {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
+    throw new RegistryApiError('登录状态已失效，请返回知识沉淀入口', 401)
+  }
   const headers = new Headers(init.headers)
-  headers.set('Authorization', `Bearer ${session.loginCode}`)
+  headers.set('Authorization', `Bearer ${accessToken}`)
   const { response, payload } = await requestJson(path, { ...init, headers }, binary)
   if (response.status === 401) {
-    // 已退出或重新登录后，旧请求的 401 不清除新会话。
-    if (getAuthSession()?.loginCode === session.loginCode) {
-      clearAuthSession()
+    // 旧请求不影响统一入口已经更换的新凭据，也不清理共享存储。
+    if (getAccessToken() === accessToken) {
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT))
     }
-    throw new RegistryApiError('登录状态已失效，请重新登录', 401)
+    throw new RegistryApiError('登录状态已失效，请返回知识沉淀入口', 401)
+  }
+  if (response.status === 403 && getAccessToken() === accessToken) {
+    // 权限不足保留登录态，交由入口提供返回路径，不触发重复登录。
+    window.dispatchEvent(new Event(ACCESS_DENIED_EVENT))
   }
   if (!response.ok) throw responseError(response, payload)
   if (payload === null) throw new RegistryApiError('注册中心服务返回了无效的 JSON 响应', response.status)
