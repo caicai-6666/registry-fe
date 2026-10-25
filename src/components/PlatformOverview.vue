@@ -7,7 +7,7 @@ const props = defineProps({
   selectedPlatformCodes: { type: Array, default: () => [] },
 })
 defineEmits(['toggle-platform', 'select-all-platforms'])
-const platforms = computed(() => props.snapshot?.platforms ?? [])
+const platforms = computed(() => props.snapshot?.subManagementPlatforms ?? [])
 const allSelected = computed(() => platforms.value.length > 0 && platforms.value.every(platform => props.selectedPlatformCodes.includes(platform.code)))
 const partlySelected = computed(() => !allSelected.value && platforms.value.some(platform => props.selectedPlatformCodes.includes(platform.code)))
 const now = ref(Date.now())

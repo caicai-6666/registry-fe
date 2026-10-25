@@ -10,7 +10,7 @@ const updateButton = ref(null), confirmingUpdate = ref(false)
 let confirmationTimer
 let initial = ''
 const dirty = computed(() => JSON.stringify(draft.value) !== initial)
-const invalid = computed(() => draft.value.some(row => row.code !== 'registry' && permissionLevelError(row.level) || !row.administratorKnown))
+const invalid = computed(() => draft.value.some(row => row.isSubManagementPlatform && permissionLevelError(row.level) || row.isManagementEntry && !row.administratorKnown))
 const updateDisabled = computed(() => !props.canSubmit || invalid.value || !dirty.value || !draft.value.length)
 watch(confirmingUpdate, confirming => {
   clearTimeout(confirmationTimer)
@@ -51,12 +51,12 @@ onBeforeUnmount(() => { clearTimeout(confirmationTimer); dialog.value?.close() }
         <div class="personnel-permissions__columns"><span>平台访问等级</span><span>平台管理员</span></div>
         <div class="personnel-permissions__body"><article v-for="(row, index) in draft" :key="row.code" class="personnel-permissions__row" :data-platform-code="row.code">
           <div class="personnel-permissions__permission"><div class="personnel-permissions__name"><span class="personnel-permissions__platform-icon" :class="{ 'has-logo': platformLogoUrl(row.code) }" aria-hidden="true"><img v-if="platformLogoUrl(row.code)" :src="platformLogoUrl(row.code)" alt="" draggable="false" /><svg v-else viewBox="0 0 20 20"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg></span><div><h3>{{ row.name }}</h3><span>{{ row.code }}</span></div></div>
-            <template v-if="row.code !== 'registry'">
+            <template v-if="row.isSubManagementPlatform">
             <div class="personnel-permissions__level"><input class="personnel-permissions__slider" :style="{ '--permission-progress': `${Math.max(0, Math.min(100, Number(row.level) || 0))}%` }" type="range" min="0" max="100" step="1" :value="permissionLevelError(row.level) ? 0 : row.level || 0" :disabled="pending" :aria-label="`${row.name}访问等级滑块`" @input="row.level = $event.target.value" /><input v-model="row.level" class="personnel-permissions__number" type="text" inputmode="numeric" placeholder="未授权" :disabled="pending" :aria-label="`${row.name}访问等级`" :aria-invalid="!!permissionLevelError(row.level)" :aria-describedby="`personnel-level-${index}-hint`" /></div>
             <p :id="`personnel-level-${index}-hint`" class="personnel-permissions__level-hint" :class="{ 'is-invalid': permissionLevelError(row.level) }">{{ permissionLevelError(row.level) || (row.level === '' ? '未授权 · 可输入 0–100' : '0–100 · 数值留空表示未授权') }}</p>
             </template>
           </div>
-          <label class="personnel-permissions__administrator" :title="row.administratorKnown ? undefined : '管理员信息尚未取得'" :class="{ 'is-disabled': pending || !row.administratorKnown }"><input v-model="row.administrator" type="checkbox" :disabled="pending || !row.administratorKnown" :aria-label="`${row.name}平台管理员`" /><span class="personnel-permissions__checkmark" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="m3 8 3 3 7-7" /></svg></span></label>
+          <label v-if="row.isManagementEntry" class="personnel-permissions__administrator" :title="row.administratorKnown ? undefined : '管理员信息尚未取得'" :class="{ 'is-disabled': pending || !row.administratorKnown }"><input v-model="row.administrator" type="checkbox" :disabled="pending || !row.administratorKnown" :aria-label="`${row.name}平台管理员`" /><span class="personnel-permissions__checkmark" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="m3 8 3 3 7-7" /></svg></span></label>
         </article><p v-if="!draft.length" class="personnel-permissions__empty">暂无平台权限信息</p></div>
         <footer class="personnel-permissions__footer"><p v-if="error" class="is-invalid" role="alert">{{ error }}</p><p v-else>{{ notice || (!canSubmit || invalid ? '请先补全有效的权限信息' : '当前仅预览，修改不会保存') }}</p><DecisionConfirmButton ref="updateButton" raised label="更新" confirm-label="确认更新" loading-label="更新中" loading-aria-label="正在更新员工权限" :confirming="confirmingUpdate" :loading="pending" :disabled="updateDisabled" @activate="submit" /></footer>
       </form>

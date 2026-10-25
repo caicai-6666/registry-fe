@@ -8,7 +8,7 @@ import { usePlatformSelection } from '../composables/usePlatformSelection.js'
 defineEmits(['initial-ready'])
 const { active, pageRoot } = useWorkspacePage('data-center')
 const platformSnapshot = inject(PLATFORM_DIRECTORY_KEY)
-const platformSelection = usePlatformSelection(computed(() => platformSnapshot.value.platforms))
+const platformSelection = usePlatformSelection(computed(() => platformSnapshot.value.subManagementPlatforms))
 </script>
 
 <template>

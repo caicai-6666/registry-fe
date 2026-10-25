@@ -12,7 +12,7 @@
 
 平台模型的在线状态显示绿色呼吸灯与“在线”，离线状态显示静态灰色圆点与“离线”。呼吸周期为 2.4 秒，亮度和光晕平滑变化；不移动圆点或文字。状态行使用固定高度，只有在线、离线或未知状态真正变化时才执行 240ms 淡入淡出；相同状态的新响应保留原节点和呼吸动画，不重播过渡。减少动画偏好下显示静态绿色圆点并关闭淡入淡出。
 
-过期结果保留旧实体并显示“状态待更新”，不把不可确认的状态伪装为在线或离线。当前列表接口返回全部平台（包括 registry），文件夹展示排除 registry，其余完整保留，包含 `is_alive=false` 的离线平台；前端不按存活状态过滤。某平台不再出现在成功响应中时淡出该实体，新平台淡入，已有平台调整位置时平滑移动；不将缺席推断为平台目录中仍存在但离线。
+过期结果保留旧实体并显示“状态待更新”，不把不可确认的状态伪装为在线或离线。当前列表接口返回全部平台（包括 registry），文件夹展示排除 registry，并仅保留 `is_sub_management_platform=true` 的平台，符合标记的离线平台（`is_alive=false`）同样展示；前端不按存活状态过滤。某平台不再出现在成功响应中时淡出该实体，新平台淡入，已有平台调整位置时平滑移动；不将缺席推断为平台目录中仍存在但离线。
 
 [查看在线与离线状态的隔离界面样例](../assets/screenshots/platform-status-preview.jpg)。样例展示接口支持的在线和离线两种状态。
 
@@ -22,7 +22,7 @@
 
 [查看固定区域的隔离布局样例](../assets/screenshots/platform-countdown-fixed.jpg)。浏览器测量确认从 `01:00` 更新到 `00:42` 时，区域、标签、数字及平台文件夹的位置与尺寸完全一致。
 
-成功响应为空时显示“暂无子平台”，仅表示没有非自身平台，不表示所有平台离线；加载和失败均有对应状态。筛选工具与正式文件列表见[目录与筛选](catalog.md)。
+成功响应为空时显示“暂无子平台”，仅表示没有符合条件的非自身子管理平台，不表示所有平台离线；加载和失败均有对应状态。筛选工具与正式文件列表见[目录与筛选](catalog.md)。
 
 ## 平台选择与筛选预布局
 
@@ -42,7 +42,7 @@
 
 ## 公开平台模型
 
-[`PlatformInfo`](../../src/models/platform.js) 保存 `code`、`name`、`description` 、`isAlive` 和 `admins`，`fromApi()` 将响应字段 `is_alive` 映射为 `isAlive`。`admins` 包含 userid、name 及头像文件名，人员管理按 userid 关联；只保存公开信息，不保留密钥、令牌或未知扩展字段。模型与列表不可修改，更新时整体替换。
+[`PlatformInfo`](../../src/models/platform.js) 保存 `code`、`name`、`description`、`isAlive`、`supportsA2a`、`isSubManagementPlatform`、`isManagementEntry` 和 `admins`；`fromApi()` 将后端蛇形字段映射为对应的驼峰属性。三个能力／类型标记均严格要求布尔值，缺失或类型错误时拒绝响应，不根据平台代号、存活情况或用户权限猜测。`supportsA2a` 仅保留信息，暂不参与页面筛选。`admins` 包含 userid、name 及头像文件名，人员管理按 userid 关联；只保存公开信息，不保留密钥、令牌或未知扩展字段。模型与列表不可修改，更新时整体替换。
 
 `parsePlatformList()` 保留服务端顺序，接受空列表，拒绝重复代号、缺失字段、空白名称或描述、非法代号和错误类型。存活字段必须为布尔值，不接受字符串或数字；任一条目失败不返回部分列表。
 
@@ -56,7 +56,7 @@
 
 | 方法与路径 | 用途 | 成功响应 |
 | --- | --- | --- |
-| `GET /knowledge-accumulation/registry/api/platform/list` | 读取全部平台，包含 registry 和离线平台（`is_alive=false`） | 平台数组，字段为 `code`、`name`、`description`、`is_alive`、`admins` |
+| `GET /knowledge-accumulation/registry/api/platform/list` | 读取全部平台，包含 registry 和离线平台（`is_alive=false`） | 平台数组，字段为 `code`、`name`、`description`、`supports_a2a`、`is_sub_management_platform`、`is_management_entry`、`is_alive`、`admins` |
 | `GET /knowledge-accumulation/registry/api/platform/sync-time` | 读取下一次计划同步或重试时间 | `{ "next_sync_at": "带时区时间或 null" }` |
 
 两个接口均通过 [`registryApiRequest()`](../../src/services/registryApi.js) 使用 Bearer 用户 `access_token`，请求无 Body，禁止缓存。开发请求使用同源 `/dev/knowledge-accumulation/registry/api/`，Vite 代理移除 `/dev`；构建部署使用同源 `/knowledge-accumulation/registry/api/`。不调用早先撤回的中间件列表地址，不在浏览器持有平台凭据。
@@ -65,7 +65,7 @@
 
 ## 按后端计划调度
 
-[`createPlatformDirectory()`](../../src/services/platformDirectory.js) 提供只读 Vue 响应式快照：排除 registry 的 `platforms`、包含 registry 的 `allPlatforms`、前端最后成功读取时间 `updatedAt`、后台计划 `nextSyncAt`、过期标记、刷新状态和列表／调度错误。`updatedAt` 仅是前端读取时间，不作为后端同步完成时间。
+[`createPlatformDirectory()`](../../src/services/platformDirectory.js) 提供只读 Vue 响应式快照：排除 registry 的 `platforms`、包含 registry 的 `allPlatforms`、从非自身目录筛出 `isSubManagementPlatform === true` 的 `subManagementPlatforms`、前端最后成功读取时间 `updatedAt`、后台计划 `nextSyncAt`、过期标记、刷新状态和列表／调度错误。`updatedAt` 仅是前端读取时间，不作为后端同步完成时间。
 
 目录由 `WorkspaceLayout.vue` 统一持有，数据中心和审核记录共享；进入可见的数据中心、审核广场或在其他页面打开审核记录时查询列表与计划。有未来计划时，使用单次计时器在计划时间后 1 秒检查计划，给后台同步留出缓冲；收到新的未来计划后再读列表。正常同步期间保留现有实体和显示状态，不因为请求开始就标记过期或展示进度提示；列表接口明确失败或目录过期时才保留旧实体并标记未知。
 
@@ -83,4 +83,4 @@
 
 使用 `tests/backend_fixture.py` 可验证真实 FastAPI 路由、人员认证、开发代理与浏览器更新链路。设置 `REGISTRY_TEST_PLATFORMS=1` 启用隔离目录样例；测试专用场景路由仅存在于该实例，不装配到正式后端。隔离实例使用另一个 `REGISTRY_TEST_PORT`，不能占用用户的真实后端端口。
 
-前端在平台列表解析后统一排除 `code === "registry"` 的注册中心自身平台，保留其他平台的原始顺序与在线／离线状态。平台概览、全选和来源平台筛选均使用排除后的共享目录；后续同步同样应用该规则。
+前端在平台列表解析后统一排除 `code === "registry"` 的注册中心自身平台，保留其他平台的原始顺序与在线／离线状态。数据中心的平台概览、全选及选择状态仅使用 `subManagementPlatforms`，包含符合标记的在线及离线平台；同步后标记变为 false 时清除对应选择。文件列表、审核记录等名称展示仍使用完整的非自身目录，不因筛选候选缩小而退回平台代号。空平台选择继续表示不限制来源，不会隐藏其他来源的文件。后续同步同样应用上述规则。

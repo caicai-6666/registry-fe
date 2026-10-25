@@ -13,7 +13,7 @@ export function createPlatformDirectory({
   fetchSyncTime = init => registryApiRequest('/platform/sync-time', { ...init, method: 'GET' }),
 } = {}) {
   const state = shallowRef(Object.freeze({
-    platforms: Object.freeze([]), allPlatforms: Object.freeze([]), updatedAt: null, nextSyncAt: null,
+    platforms: Object.freeze([]), allPlatforms: Object.freeze([]), subManagementPlatforms: Object.freeze([]), updatedAt: null, nextSyncAt: null,
     isStale: true, isRefreshing: false, error: null, scheduleError: null,
   }))
   let running = false
@@ -40,7 +40,9 @@ export function createPlatformDirectory({
       const payload = await fetchList({ signal: current.controller.signal })
       if (!isCurrent(current)) return
       const allPlatforms = parsePlatformList(payload, { includeRegistry: true })
-      update({ allPlatforms, platforms: Object.freeze(allPlatforms.filter(platform => platform.code !== 'registry')), updatedAt: new Date().toISOString(), isStale: false, error: null })
+      const platforms = Object.freeze(allPlatforms.filter(platform => platform.code !== 'registry'))
+      const subManagementPlatforms = Object.freeze(platforms.filter(platform => platform.isSubManagementPlatform))
+      update({ allPlatforms, platforms, subManagementPlatforms, updatedAt: new Date().toISOString(), isStale: false, error: null })
     } catch (error) {
       fail(error, current, { isStale: true, error: error instanceof Error ? error.message : '平台状态查询失败，请稍后重试' })
     }

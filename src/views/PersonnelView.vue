@@ -57,7 +57,7 @@ const users = computed(() => buildPersonnelUsers(directory.records.value, direct
 watch([directory.loaded, directory.error, directory.loading], ([loaded, error, loading]) => {
   if (active.value && !loading && (loaded || error)) emit('initial-ready')
 }, { flush: 'post' })
-const administratorPlatforms = computed(() => administratorsReady.value ? platformSnapshot.value.allPlatforms : [])
+const administratorPlatforms = computed(() => administratorsReady.value ? platformSnapshot.value.allPlatforms.filter(platform => platform.isManagementEntry) : [])
 const department = ref(''), administratorPlatform = ref(''), locatorQuery = ref(''), appliedQuery = ref(''), locatedId = ref('')
 const departments = computed(() => {
   const options = new Map(directory.departments.value.map(unit => [unit.id, unit]))

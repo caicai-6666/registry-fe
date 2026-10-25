@@ -54,7 +54,10 @@ export function buildPersonnelUsers(records, departments, platforms = null) {
     const managedPlatforms = platforms === null ? null : Object.freeze([...(management.get(record.userid) || [])])
     const codes = new Set([...platformMap.keys(), ...Object.keys(record.platformPermissions)])
     const platformAccess = Object.freeze([...codes].map(code => Object.freeze({ code, name: platformMap.get(code)?.name || code,
-      isAlive: platformMap.get(code)?.isAlive ?? null, authorized: Object.hasOwn(record.platformPermissions, code),
+      isAlive: platformMap.get(code)?.isAlive ?? null,
+      isSubManagementPlatform: platformMap.get(code)?.isSubManagementPlatform === true,
+      isManagementEntry: platformMap.get(code)?.isManagementEntry === true,
+      authorized: Object.hasOwn(record.platformPermissions, code),
       level: record.platformPermissions[code] ?? null, isAdmin: managedPlatforms === null ? null : managedPlatforms.includes(code) })))
     return Object.freeze({ ...record, username: record.name?.trim() || record.userid, departmentName: departmentNames.get(record.departmentId) || `部门 #${record.departmentId}`,
       managedPlatforms, isPlatformAdmin: managedPlatforms === null ? null : managedPlatforms.length > 0, platformAccess })

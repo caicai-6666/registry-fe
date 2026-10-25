@@ -1,6 +1,8 @@
 export function createPersonnelPermissionDraft(user) {
-  return user.platformAccess.map(platform => ({
+  return user.platformAccess.filter(platform => platform.isSubManagementPlatform || platform.isManagementEntry).map(platform => ({
     code: platform.code, name: platform.name,
+    isSubManagementPlatform: platform.isSubManagementPlatform,
+    isManagementEntry: platform.isManagementEntry,
     level: platform.authorized ? platform.level : '',
     administrator: platform.isAdmin === true,
     administratorKnown: platform.isAdmin !== null,

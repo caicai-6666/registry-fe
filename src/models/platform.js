@@ -10,11 +10,11 @@ export class PlatformDataError extends Error {
 
 // 只保存公开平台信息；isAlive 表示登录会话有效，不代表业务健康。
 export class PlatformInfo {
-  constructor({ code, name, description, isAlive, admins = [] }) {
+  constructor({ code, name, description, isAlive, supportsA2a, isSubManagementPlatform, isManagementEntry, admins = [] }) {
     if (typeof code !== 'string' || !PLATFORM_CODE_PATTERN.test(code) ||
         typeof name !== 'string' || !name.trim() ||
         typeof description !== 'string' || !description.trim() ||
-        typeof isAlive !== 'boolean') {
+        [isAlive, supportsA2a, isSubManagementPlatform, isManagementEntry].some(value => typeof value !== 'boolean')) {
       throw new PlatformDataError()
     }
     if (!Array.isArray(admins)) throw new PlatformDataError('平台管理员资料无效')
@@ -28,6 +28,9 @@ export class PlatformInfo {
     this.name = name
     this.description = description
     this.isAlive = isAlive
+    this.supportsA2a = supportsA2a
+    this.isSubManagementPlatform = isSubManagementPlatform
+    this.isManagementEntry = isManagementEntry
     Object.freeze(this)
   }
 
@@ -38,6 +41,9 @@ export class PlatformInfo {
       name: value.name,
       description: value.description,
       isAlive: value.is_alive,
+      supportsA2a: value.supports_a2a,
+      isSubManagementPlatform: value.is_sub_management_platform,
+      isManagementEntry: value.is_management_entry,
       admins: value.admins,
     })
   }
