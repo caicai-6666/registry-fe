@@ -21,6 +21,12 @@ const directory = usePersonnelDirectory(computed(() => active.value))
 const platformSnapshot = inject(PLATFORM_DIRECTORY_KEY)
 const refreshPlatforms = inject(PLATFORM_REFRESH_KEY)
 const permissionUser = shallowRef(null), permissionError = ref(''), permissionFeedback = ref(''), permissionPending = ref(false), permissionConflict = ref(false)
+let permissionFeedbackTimer
+watch(permissionFeedback, message => {
+  clearTimeout(permissionFeedbackTimer)
+  if (message) permissionFeedbackTimer = setTimeout(() => { permissionFeedback.value = '' }, 3000)
+}, { flush: 'sync' })
+onBeforeUnmount(() => clearTimeout(permissionFeedbackTimer))
 function openPermissions(user) {
   if (permissionPending.value || organizationRefreshing.value || directory.loading.value) return
   permissionError.value = ''; permissionFeedback.value = ''; permissionConflict.value = false; permissionUser.value = user
@@ -40,7 +46,7 @@ async function updatePermissions(draft) {
     await updatePersonnelPermissions(createPersonnelPermissionPatch(user, draft))
     if (token !== getAccessToken()) return
     permissionUser.value = null
-    permissionFeedback.value = `${user.username}的权限已更新。`
+    if (active.value) permissionFeedback.value = `${user.username}的权限已更新。`
     await reloadPermissionDirectory()
   } catch (error) {
     if (token !== getAccessToken()) return
@@ -51,7 +57,9 @@ async function updatePermissions(draft) {
     }
   } finally { permissionPending.value = false }
 }
-watch(() => active.value, active => { if (!active) permissionUser.value = null })
+watch(() => active.value, active => {
+  if (!active) { permissionUser.value = null; permissionFeedback.value = '' }
+})
 const organizationRefreshing = ref(false), organizationFeedback = ref(''), organizationError = ref('')
 const confirmingRefresh = ref(false)
 let confirmationTimer
@@ -147,7 +155,6 @@ async function locateUser(query) {
       </header>
       <p v-if="organizationError" class="personnel__notice" role="alert">{{ organizationError }}</p>
       <p v-else-if="organizationFeedback" class="personnel__notice personnel__notice--success" role="status">{{ organizationFeedback }}</p>
-      <p v-if="permissionFeedback" class="personnel__notice personnel__notice--success" role="status">{{ permissionFeedback }}</p>
       <p v-if="permissionError && !permissionUser" class="personnel__notice" role="alert">{{ permissionError }}</p>
       <p v-if="directory.error.value" class="personnel__notice" role="alert">{{ directory.error.value }} <button type="button" :disabled="directory.loading.value || organizationRefreshing || permissionPending" @click="refreshDirectory">重试</button></p>
       <p v-if="platformSnapshot.error" class="personnel__notice" role="status">管理员信息更新失败：{{ platformSnapshot.error }}{{ administratorsReady ? '，暂按最近一次结果展示。' : '，管理员筛选暂不可用。' }} <button type="button" :disabled="directory.loading.value || organizationRefreshing || permissionPending" @click="refreshDirectory">重试</button></p>
@@ -160,9 +167,25 @@ async function locateUser(query) {
         <template #empty-actions><button v-if="users.length" type="button" class="personnel__reset-filters" @click="resetFilters">清空筛选</button></template>
       </ContentState>
     </section>
+    <Teleport to="body">
+      <div role="status" aria-live="polite" aria-atomic="true">
+        <Transition name="permission-toast">
+          <div v-if="permissionFeedback" class="permission-toast">
+            <span class="permission-toast__icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6.5 12 3.5 3.5 7.5-7.5" /></svg></span>
+            <span class="permission-toast__message">{{ permissionFeedback }}</span>
+          </div>
+        </Transition>
+      </div>
+    </Teleport>
   </section>
 </template>
 <style scoped>
+.permission-toast { position: fixed; z-index: 1000; top: max(20px, env(safe-area-inset-top)); left: 50%; display: flex; align-items: center; gap: 12px; width: max-content; max-width: min(440px, calc(100vw - 32px)); padding: 10px 18px 10px 10px; color: #52665c; background: #fcfffcf5; border: 1px solid #e0ece2; border-radius: 21px; box-shadow: 0 10px 30px #47735118, inset 0 1px #fff; backdrop-filter: blur(14px); transform: translateX(-50%); pointer-events: none; font-size: 13px; line-height: 1.6; }
+.permission-toast__icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border: 2px solid #fff; border-radius: 50%; color: #fff; background: #78b58c; box-shadow: 0 2px 6px #6a9d7633, inset 0 1px #ffffff70; }
+.permission-toast__icon svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.permission-toast__message { min-width: 0; overflow-wrap: anywhere; }
+.permission-toast-enter-active, .permission-toast-leave-active { transition: opacity .2s ease, transform .24s cubic-bezier(.22, 1, .36, 1); }
+.permission-toast-enter-from, .permission-toast-leave-to { opacity: 0; transform: translate(-50%, -8px); }
 .personnel__reset-filters { padding: 5px 12px; border: 0; background: transparent; color: #7f9387; font-size: 11px; cursor: pointer; }
 .personnel { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 28px; }
 .personnel__filters { display: grid; grid-template-columns: minmax(220px, 1.35fr) repeat(2, minmax(150px, 1fr)) auto; gap: 28px; flex: none; padding: 0 4px 28px; border-bottom: 1px solid #91a59826; }
@@ -188,5 +211,5 @@ async function locateUser(query) {
 @keyframes personnel-locate { 0% { box-shadow: 0 0 0 0 #8aa89566; } 100% { box-shadow: 0 0 0 3px #8aa8951f; } }
 @media (max-width: 1100px) { .personnel__list { grid-template-columns: repeat(2, minmax(0, 1fr)); } .personnel__filters { grid-template-columns: minmax(220px, 1.35fr) repeat(2, minmax(150px, 1fr)); gap: 20px; } .personnel__organization-refresh { grid-column: 1 / -1; justify-self: end; margin: 0 0 5px; } }
 @media (max-width: 760px) { .personnel { padding: 20px 18px; min-height: 100%; height: auto; } .personnel__filters { grid-template-columns: 1fr; gap: 24px; padding-bottom: 24px; } .personnel__results { min-height: 240px; overflow: visible; } .personnel__list { grid-template-columns: 1fr; gap: 12px; } }
-@media (prefers-reduced-motion: reduce) { .personnel-row-enter-active, .personnel-row-leave-active, .personnel-row-move { transition: none; } .personnel__list > li.is-located :deep(.personnel-user) { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .permission-toast-enter-active, .permission-toast-leave-active, .personnel-row-enter-active, .personnel-row-leave-active, .personnel-row-move { transition: none; } .personnel__list > li.is-located :deep(.personnel-user) { animation: none; } }
 </style>
