@@ -1,4 +1,4 @@
-// 公开路径跟随页面基础路径；开发的 /dev 前缀由 Vite 代理移除。
+// 公开路径跟随页面基础路径；开发请求携带 /dev，由网关与 Vite 原样转发。
 const PUBLIC_BASE_PATH = import.meta.env?.BASE_URL || '/knowledge-accumulation/registry/'
 export const REGISTRY_API_BASE_PATH = `${PUBLIC_BASE_PATH}api`
 export const ACCESS_DENIED_EVENT = 'registry-access-denied'

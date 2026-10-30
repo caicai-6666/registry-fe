@@ -12,7 +12,7 @@
 | 文件预览 | 根据原件类型展示 PDF、音频或视频，内容显示后淡入摘要及通行证悬浮入口；下载资源在页面内临时缓存。 |
 | 审核广场 | 入库／删除审核三栏布局，接入正式待审列表、原件预览、必填备注及通过／拒绝提交，包含二次确认、加载反馈与成功退出动画。 |
 | 审核记录 | 查看本人入库、关联删除审核历史及全体操作人的文件等级变更记录；切换复用缓存，平台优先显示名称。 |
-| 人员管理 | 顶部提供用户名、部门与管理员联合筛选，下方展示头像、用户名和部门；已接入正式人员、部门和平台接口，管理员按 userid 关联；点击成员卡片可预览编辑各平台等级与管理员身份，权限更新接口暂未接入。 |
+| 人员管理 | 顶部提供用户名、部门与管理员联合筛选，下方展示头像、用户名和部门；已接入正式人员、部门和平台接口，管理员按 userid 关联；支持多部门展示与筛选，点击成员卡片可编辑平台等级与管理员身份，经二次确认后提交增量更新。 |
 
 入库审核支持 0–100 文件等级滑动条与数值输入，双向同步；通过时提交等级，拒绝时不提交。审核广场另提供“文件等级调整”，支持目录筛选和逐项等级编辑，已接入等级更新接口及未确认结果重试。详情见[审核广场](description/features/review-square.md#文件入库审核)。
 
@@ -20,7 +20,7 @@
 
 ## 页面预览
 
-以下为当前代码的桌面实际渲染截图（1440 × 1000），使用隔离后端、测试身份及测试文件，不代表生产数据。
+以下为此前隔离联调保存的桌面截图（1440 × 1000），使用测试身份及文件，不代表生产数据，也不作为最新代码的验收结果。
 
 ### 数据中心
 
@@ -47,12 +47,12 @@ npm ci
 npm run dev
 ```
 
-- 本机入口：`http://127.0.0.1:23080/dev/knowledge-accumulation/registry/`
-- 开发域名入口：`https://pheno.szkl.com/dev/knowledge-accumulation/registry/`
-- 构建部署入口：`https://pheno.szkl.com/knowledge-accumulation/registry/`
-- 默认后端：`http://127.0.0.1:23000`
+- 本机入口：`http://127.0.0.1:16080/dev/knowledge-accumulation/registry/`
+- 开发域名入口：`https://talent.szkl.com/dev/knowledge-accumulation/registry/`
+- 构建部署入口：`https://talent.szkl.com/knowledge-accumulation/registry/`
+- 默认后端：`http://127.0.0.1:16000`
 
-Vite 允许 `pheno.szkl.com` 的 Host 请求，开发映射须完整保留 `/dev/knowledge-accumulation/registry/` 前缀转发至本机 `23080`。需要修改后端地址时，复制 `.env.example` 为 `.env.local`，设置 `REGISTRY_BACKEND_URL`。统一入口需在同源 `localStorage` 的 `access_token` 键保存原始 token，再跳转到注册中心。本项目不需要登录模式、开发 token 或 CorpId 配置；详情见[共享凭据与鉴权](description/platform/authentication.md)。
+Vite 允许 `talent.szkl.com` 的 Host 请求，开发映射须完整保留 `/dev/knowledge-accumulation/registry/` 前缀转发至本机 `16080`。需要修改后端地址时，复制 `.env.example` 为 `.env.local`，设置 `REGISTRY_BACKEND_URL`。统一入口需在同源 `localStorage` 的 `access_token` 键保存原始 token，再跳转到注册中心。本项目不需要登录模式、开发 token 或 CorpId 配置；详情见[共享凭据与鉴权](description/platform/authentication.md)。
 
 ## 构建、预览与验证
 
@@ -62,9 +62,11 @@ npm run build
 npm run preview
 ```
 
-构建输出至 `dist/`。`npm run build` 会先同步 PDF.js 运行时资源；当前未配置 Lint 脚本。`tests/` 已按项目要求排除提交，以下测试基线来自当前本地工作区；新检出仓库不包含这些测试脚本。测试覆盖鉴权、路由、开发映射、平台同步、目录筛选与分月排序、预览缓存及两种审核流程。
+构建输出至 `dist/`。`npm run build` 会先同步 PDF.js 运行时资源；当前未配置 Lint 脚本。预览联调须连接提供生产 API 前缀的后端，配置见[服务与预览](description/platform/deployment.md#vite-服务与预览)。`npm test` 只运行本地 `tests/*.test.js`，不执行浏览器联调脚本。`tests/` 按项目要求排除提交，新检出仓库不包含这些测试脚本；执行前需确认本地文件存在，不能将缺少测试或零用例视为验证通过。
 
-当前验证为 **89 项测试通过、生产构建通过**。人员管理使用独立无头 Chrome 与正式 FastAPI 路由的隔离依赖联调，覆盖管理员关联、部门筛选、同名定位、失败重试、空列表、头像加载及 390px 窄屏；不读取真实用户数据库。数据中心与审核广场截图为此前隔离联调记录。
+2026-10-30 本地核验：6 项自动测试通过，覆盖人员多部门解析与筛选、权限增量提交及主要失败路径；生产构建、Docker 镜像构建、独立及统一部署 Compose 配置校验通过。临时 Nginx 容器验证了深层页面、静态资源与缓存、PDF.js 资源、模拟 API 路径及 Bearer／401 转发。
+
+专题中的浏览器、真实 FastAPI 路由隔离联调及截图记录来自此前验证，不属于本次自动测试覆盖范围；部分历史测试夹具已不在当前工作区。本次未重跑完整浏览器流程，也未验证线上 HTTPS、FRP 或真实业务后端。
 
 ## 路由与部署
 
@@ -76,7 +78,7 @@ npm run preview
 
 开发页面前缀为 `/dev/knowledge-accumulation/registry/`，构建预览和容器部署为 `/knowledge-accumulation/registry/`。只区分访问前缀，不配置开发账号或钉钉登录模式。从共享存储读取 token 后直接请求业务接口；缺少凭据、401 或 403 时展示返回知识沉淀入口的按钮，开发返回 `/dev/knowledge-accumulation/`，构建部署返回 `/knowledge-accumulation/`。旧 `/workspace` 及 `/login` 地址进入数据中心。
 
-开发 API 通过同源 `/dev/knowledge-accumulation/registry/api/` 请求，Vite 代理移除 `/dev`；构建部署使用 `/knowledge-accumulation/registry/api/` 原样代理。Docker 默认向宿主机 `127.0.0.1:23080` 映射 HTTP 端口，再由外层 HTTPS 网关转发。镜像、后端网络和网关要求见[环境与部署](description/platform/deployment.md)。本仓库配置完成不代表云端已部署。
+开发 API 通过同源 `/dev/knowledge-accumulation/registry/api/` 请求，Vite 与网关均保留 `/dev`；构建部署使用 `/knowledge-accumulation/registry/api/` 原样代理。Docker 默认向宿主机 `127.0.0.1:23080` 映射 HTTP 端口，再由外层 HTTPS 网关转发。镜像、后端网络和网关要求见[环境与部署](description/platform/deployment.md)。本仓库配置完成不代表云端已部署。
 
 图片图标输出为带内容哈希的独立资源，Nginx 静态服务及构建预览支持一年缓存，图片内容变化后使用新 URL；Vite 源码服务保留缓存校验与热更新。文件原件的页面内临时缓存与图标 HTTP 缓存相互独立。
 
@@ -90,6 +92,7 @@ npm run preview
 - [文件展示器与预览缓存](description/features/file-preview.md)
 - [审核广场](description/features/review-square.md)
 - [审核记录](description/features/review-history.md)
+- [人员筛选、多部门与权限更新](description/features/personnel.md)
 - [页面路由与错误回退](description/platform/routing.md)
 - [共享凭据与后端鉴权](description/platform/authentication.md)
 - [环境与部署](description/platform/deployment.md)

@@ -36,7 +36,11 @@ export function parsePersonnelList(payload) {
       if (!PLATFORM_CODE_PATTERN.test(code)) throw new Error('用户平台权限无效')
       return [code, unsignedInteger(value)]
     }))
-    return Object.freeze({ userid: row.userid, name: row.name, departmentId: unsignedInteger(row.department_id, 18446744073709551615n),
+    // 仅旧响应缺少数组时回退单值；兼容字段不代表主部门。
+    const departmentIds = row.department_ids === undefined ? [row.department_id] : row.department_ids
+    if (!Array.isArray(departmentIds) || !departmentIds.length) throw new Error('用户部门列表无效')
+    const normalizedDepartmentIds = [...new Set(departmentIds.map(id => unsignedInteger(id, 18446744073709551615n)))]
+    return Object.freeze({ userid: row.userid, name: row.name, departmentIds: Object.freeze(normalizedDepartmentIds),
       avatarFilename: parseAvatarFilename(row.avatar_url), platformPermissions: Object.freeze(permissions) })
   }))
 }
@@ -59,11 +63,12 @@ export function buildPersonnelUsers(records, departments, platforms = null) {
       isManagementEntry: platformMap.get(code)?.isManagementEntry === true,
       authorized: Object.hasOwn(record.platformPermissions, code),
       level: record.platformPermissions[code] ?? null, isAdmin: managedPlatforms === null ? null : managedPlatforms.includes(code) })))
-    return Object.freeze({ ...record, username: record.name?.trim() || record.userid, departmentName: departmentNames.get(record.departmentId) || `部门 #${record.departmentId}`,
+    const userDepartments = Object.freeze(record.departmentIds.map(id => Object.freeze({ id, name: departmentNames.get(id) || `部门 #${id}` })))
+    return Object.freeze({ ...record, username: record.name?.trim() || record.userid, departments: userDepartments,
       managedPlatforms, isPlatformAdmin: managedPlatforms === null ? null : managedPlatforms.length > 0, platformAccess })
   }))
 }
-export function personnelDepartment(user) { return user.departmentName }
+export function personnelDepartment(user) { return user.departments.map(department => department.name).join('、') }
 export function personnelLocatorLabel(user) { return `${user.username} · ${personnelDepartment(user)} · ${user.userid}` }
 export function findPersonnelUsers(users, query) {
   const text = query.trim().toLocaleLowerCase()
@@ -76,6 +81,6 @@ export function filterPersonnelUsers(users, { username = '', department = '', ad
   const selected = text ? users.find(user => personnelLocatorLabel(user) === username) : null
   return users.filter(user => (!text || (selected ? user.userid === selected.userid :
     user.username.toLocaleLowerCase().includes(text) || user.userid.toLocaleLowerCase().includes(text))) &&
-    (!department || user.departmentId === department) &&
+    (!department || user.departmentIds.includes(department)) &&
     (!administratorPlatform || user.managedPlatforms?.includes(administratorPlatform) === true))
 }

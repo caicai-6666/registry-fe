@@ -5,7 +5,7 @@ import { iconAssetCache } from './config/iconAssetCache.js'
 export default defineConfig(({ command, isPreview }) => {
   const servingSource = command === 'serve' && !isPreview
   const env = loadEnv('', process.cwd(), 'REGISTRY_')
-  const target = env.REGISTRY_BACKEND_URL || 'http://127.0.0.1:23000'
+  const target = env.REGISTRY_BACKEND_URL || 'http://127.0.0.1:16000'
   const backendUrl = new URL(target)
   if (!['http:', 'https:'].includes(backendUrl.protocol) || backendUrl.username || backendUrl.password ||
       backendUrl.pathname !== '/' || backendUrl.search || backendUrl.hash) {
@@ -17,7 +17,6 @@ export default defineConfig(({ command, isPreview }) => {
   const sourceProxy = {
     '/dev/knowledge-accumulation/registry/api': {
       target, changeOrigin: true,
-      rewrite: path => path.replace(/^\/dev(?=\/knowledge-accumulation\/registry\/api)/, ''),
     },
   }
   return {
@@ -29,11 +28,11 @@ export default defineConfig(({ command, isPreview }) => {
     build: { assetsInlineLimit: filePath => /\.(?:webp|png|jpe?g|gif|svg|ico|avif)$/i.test(filePath) ? false : undefined },
     server: {
       host: '127.0.0.1',
-      port: 23080,
+      port: 16080,
       strictPort: true,
-      allowedHosts: ['pheno.szkl.com'],
+      allowedHosts: ['talent.szkl.com'],
       proxy: sourceProxy,
     },
-    preview: { host: '127.0.0.1', allowedHosts: ['pheno.szkl.com'], proxy },
+    preview: { host: '127.0.0.1', allowedHosts: ['talent.szkl.com'], proxy },
   }
 })

@@ -29,7 +29,7 @@
 
 ## 验证
 
-既有测试及构建验证通过，当前总体基线见根目录 [README](../../README.md#构建预览与验证)。浏览器验证默认类型、切换到删除审核、离开再返回后的类型保留，以及桌面和 390px 窄屏的显示。使用隔离登录身份，仅向隔离测试后端提交审核，不操作真实业务数据。
+本页联调与截图为历史验证记录，当前可运行测试及验证限制见根目录 [README](../../README.md#构建预览与验证)。此前浏览器验证默认类型、切换到删除审核、离开再返回后的类型保留，以及桌面和 390px 窄屏的显示。使用隔离登录身份，仅向隔离测试后端提交审核，不操作真实业务数据。
 
 [桌面三栏](../assets/screenshots/review-square-layout-desktop.jpg) · [窄屏布局](../assets/screenshots/review-square-layout-mobile.jpg)。
 
@@ -44,7 +44,7 @@
 | 提交决定 | `POST /knowledge-accumulation/registry/api/ingestion-review/{review_id}/decision` |
 | 现存通行证提示 | `GET /knowledge-accumulation/registry/api/catalog/list`，合并文件的 `passport` 数组并去重 |
 
-以上接口携带人员 Bearer 凭据，构建部署使用上述 API 路径；开发请求增加 `/dev`，由 Vite 代理移除该前缀。列表与决定响应使用精确 JSON 解析，SQLite 审核 ID 不经过有损数值转换。字段及错误契约以[后端入库审核 API](../../../registry-be/description/api/ingestion-review.md)为准。
+以上接口携带人员 Bearer 凭据，构建部署使用上述 API 路径；开发请求增加 `/dev`，网关与 Vite 均保留该前缀。列表与决定响应使用精确 JSON 解析，SQLite 审核 ID 不经过有损数值转换。字段及错误契约以[后端入库审核 API](../../../registry-be/description/api/ingestion-review.md)为准。
 
 入库与删除审核各自在页面内首次进入时读取待审列表和目录，成功后缓存各自结果；之后类型切换、离开再返回审核广场或页面恢复可见均不重复请求，也不重新展示 loading，空列表同样缓存。首次未完成、失败或目录读取不完整时，重新进入可重试；离开或隐藏页面取消未完成的读取，忽略迟到响应。手动刷新及错误重试显式读取最新待审列表和目录，成功审核从缓存中移除对应申请，不因切回而恢复。申请列表与审核记录弹窗共用 `RefreshButton.vue`，采用同一单箭头图标、白色圆形底及阴影，刷新动画以 0.8 秒转满一圈后停止，减少动画偏好下关闭旋转。入库与删除申请在首次加载及手动刷新时，申请列表和详情均显示水平、垂直居中的转圈 loading；空列表淡入 `empty.webp` 及“空空如也”，空详情淡入 `sleep.webp`。空状态退出后再展示内容，失败保留旧结果并展示错误和重试。共用 [`ContentState.vue`](../../src/components/ContentState.vue)，遵循[列表与详情的状态展示](workspace.md#列表与详情的状态展示)；图标资源由用户提供的 PNG 无损转换而来。保留仍存在的选中项，否则选择首条。
 

@@ -12,7 +12,7 @@
 | 了解数据中心左右布局与导航 | [注册中心导航与数据中心](features/workspace.md) |
 | 了解文件筛选、提示、分月排序及鉴权原件 | [正式文件目录与原件接入](features/catalog.md) |
 | 设计审核广场、入库申请与审核表单 | [审核广场三栏布局](features/review-square.md) |
-| 了解人员模型、头像、部门及管理员筛选 | [人员管理](features/personnel.md) |
+| 了解人员模型、多部门筛选、头像及权限更新 | [人员管理](features/personnel.md) |
 | 查看入库、删除审核历史与文件等级变更记录 | [我的审核记录](features/review-history.md) |
 | 了解文件类型分发、预览弹窗与 PDF 阅读器 | [文件展示器与预览弹窗](features/file-preview.md) |
 | 了解可复用的平台模型与查询鉴权边界 | [平台模型与查询接入](features/platforms.md) |
@@ -24,8 +24,8 @@
 | 新建、修改或审查文档 | [文档撰写风格手册](documentation.md) |
 | 了解注册中心后端职责与业务背景 | [后端项目说明](../../registry-be/description/project.md) |
 | 查找后端现有接口 | [后端 API 参考](../../registry-be/description/api/readme.md) |
-| 确认当前身份接口 | [人员登录 API](../../registry-be/description/api/auth.md) |
-| 查找整体布局的参考实现 | [参考项目文档导航](../../../现象合同智能管理平台/contract-service-fe/description/readme.md) |
+| 确认当前身份接口 | [人员身份 API](../../registry-be/description/api/auth.md) |
+| 查找整体布局的参考实现 | [参考项目文档导航](../../contract-service-fe/description/readme.md) |
 
 跨项目链接基于当前本地仓库相对位置；单独检出本仓库时，需另行取得对应后端或参考项目。
 
@@ -43,19 +43,19 @@ description/
 │   ├── deployment.md      本地代理、Docker 与域名网关
 │   └── routing.md         页面地址、共享外框与错误回退
 ├── features/
-│   ├── personnel.md       正式人员模型、筛选定位与头像读取
+│   ├── personnel.md       人员模型、多部门筛选、头像与权限更新
 │   ├── workspace.md       数据中心左右布局与导航
 │   ├── platforms.md       平台模型、列表校验与查询接入边界
 │   ├── file-preview.md    通用预览弹窗、类型分发与 PDF 阅读器
-│   ├── review-square.md   审核广场三栏与类型导航
-│   ├── review-history.md  本人审核历史弹窗与接口
+│   ├── review-square.md   入库／删除审核、类型导航与文件等级调整
+│   ├── review-history.md  审核历史弹窗与文件等级变更记录
 │   └── catalog.md         正式目录、组合筛选、分月排序与原件接口
 └── assets/screenshots/ 实际页面预览截图
 ```
 
 顶层只保留上述三份文档。后续登录、路由、部署等跨业务能力归入 `platform/`，面向用户的业务功能归入 `features/`。在对应能力形成明确设计或实现前，不预建空目录和占位链接。
 
-仓库功能总览与快速入口见根目录 [README](../README.md)。README 已嵌入数据中心和审核广场的桌面截图，均使用隔离测试数据；其他截图为此前联调记录，不作为最新布局的验证结果。
+仓库功能总览与快速入口见根目录 [README](../README.md)。README 已嵌入数据中心、审核广场和人员管理的桌面截图，均为此前隔离测试数据的联调记录，不作为最新代码的验收结果。
 
 ---
 
@@ -70,7 +70,7 @@ npm ci
 npm run dev
 ```
 
-本机 Vite 入口为 `http://127.0.0.1:23080/dev/knowledge-accumulation/registry/`，开发域名入口为 `https://pheno.szkl.com/dev/knowledge-accumulation/registry/`。页面从统一入口的共享存储读取 token，已接入本人入库与关联删除审核历史，入库及删除待审列表、原件及审核决定已接入，消息服务尚未接入。后端代理、域名白名单、构建预览及容器配置见[环境与部署](platform/deployment.md)。
+本机 Vite 入口为 `http://127.0.0.1:16080/dev/knowledge-accumulation/registry/`，开发域名入口为 `https://talent.szkl.com/dev/knowledge-accumulation/registry/`。页面从统一入口的共享存储读取 token，已接入本人入库与关联删除审核历史，入库及删除待审列表、原件及审核决定已接入，消息服务尚未接入。后端代理、域名白名单、构建预览及容器配置见[环境与部署](platform/deployment.md)。
 
 构建与本地预览：
 
@@ -79,7 +79,7 @@ npm run build
 npm run preview
 ```
 
-构建产物输出至 `dist/`；预览命令用于检查本地构建结果。`npm test` 执行路由、接口、会话、平台调度、文本筛选、分月排序和预览缓存等测试；前端容器部署见[环境与部署](platform/deployment.md)。当前未配置 Lint 脚本。
+构建产物输出至 `dist/`；预览命令用于检查本地构建结果。`npm test` 执行本地 `tests/*.test.js`，测试目录不随仓库提交；当前覆盖范围与验证限制见根目录 [README](../README.md#构建预览与验证)；前端容器部署见[环境与部署](platform/deployment.md)。当前未配置 Lint 脚本。
 
 后端准备和启动见[后端运行说明](../../registry-be/description/capability/application/runtime.md)。前端联调配置见[环境与部署](platform/deployment.md)。
 

@@ -59,7 +59,7 @@
 | `GET /knowledge-accumulation/registry/api/platform/list` | 读取全部平台，包含 registry 和离线平台（`is_alive=false`） | 平台数组，字段为 `code`、`name`、`description`、`supports_a2a`、`is_sub_management_platform`、`is_management_entry`、`is_alive`、`admins` |
 | `GET /knowledge-accumulation/registry/api/platform/sync-time` | 读取下一次计划同步或重试时间 | `{ "next_sync_at": "带时区时间或 null" }` |
 
-两个接口均通过 [`registryApiRequest()`](../../src/services/registryApi.js) 使用 Bearer 用户 `access_token`，请求无 Body，禁止缓存。开发请求使用同源 `/dev/knowledge-accumulation/registry/api/`，Vite 代理移除 `/dev`；构建部署使用同源 `/knowledge-accumulation/registry/api/`。不调用早先撤回的中间件列表地址，不在浏览器持有平台凭据。
+两个接口均通过 [`registryApiRequest()`](../../src/services/registryApi.js) 使用 Bearer 用户 `access_token`，请求无 Body，禁止缓存。开发请求使用同源 `/dev/knowledge-accumulation/registry/api/`，网关与 Vite 均保留 `/dev`；构建部署使用同源 `/knowledge-accumulation/registry/api/`。不调用早先撤回的中间件列表地址，不在浏览器持有平台凭据。
 
 列表接口返回 `503` 时说明目录不可用或过期，前端保留上次结果并标记未知；不能伪装成空列表。同步时间接口的 `200` 不代表平台列表可用。`next_sync_at` 是计划时间，不是完成时间或上次成功同步时间，null 可能表示正在同步，也可能表示未启用或没有后续计划。
 
@@ -67,20 +67,20 @@
 
 [`createPlatformDirectory()`](../../src/services/platformDirectory.js) 提供只读 Vue 响应式快照：排除 registry 的 `platforms`、包含 registry 的 `allPlatforms`、从非自身目录筛出 `isSubManagementPlatform === true` 的 `subManagementPlatforms`、前端最后成功读取时间 `updatedAt`、后台计划 `nextSyncAt`、过期标记、刷新状态和列表／调度错误。`updatedAt` 仅是前端读取时间，不作为后端同步完成时间。
 
-目录由 `WorkspaceLayout.vue` 统一持有，数据中心和审核记录共享；进入可见的数据中心、审核广场或在其他页面打开审核记录时查询列表与计划。有未来计划时，使用单次计时器在计划时间后 1 秒检查计划，给后台同步留出缓冲；收到新的未来计划后再读列表。正常同步期间保留现有实体和显示状态，不因为请求开始就标记过期或展示进度提示；列表接口明确失败或目录过期时才保留旧实体并标记未知。
+目录由 `WorkspaceLayout.vue` 统一持有，数据中心、审核广场、人员管理和审核记录共享；三个工作台任一可见或审核记录打开时查询列表与计划。有未来计划时，使用单次计时器在计划时间后 1 秒检查计划，给后台同步留出缓冲；收到新的未来计划后再读列表。正常同步期间保留现有实体和显示状态，不因为请求开始就标记过期或展示进度提示；列表接口明确失败或目录过期时才保留旧实体并标记未知。
 
 计划为 null、已过期、格式错误或请求失败时，按 1、2、4、8、16、30 秒逐步退避重查同步时间，最多 30 秒；此时不周期探测平台列表。恢复有效未来计划后读取列表并重新按后端时间调度。该重试用于恢复调度，不是可配置的业务探测周期。
 
 进行中的查询复用同一请求，重复启动不累积计时器或请求。长时间计划分段等待，避免计时器溢出。调度与倒计时使用浏览器系统时间，系统时钟应正确；后台标签页的浏览器调度可能延迟执行，恢复可见时重新读取计划和列表，并按实际时间差恢复倒计时。
 
-离开数据中心和审核广场且审核记录未打开、标签页隐藏、退出或布局卸载时停止计时器并取消请求，保留内存中的旧实体；返回或恢复可见时重新获取。任一接口 `401` 停止调度，由鉴权处理展示失效提示及返回统一入口按钮。旧请求即使迟到，也不能覆盖停止或重启后的状态。
+离开三个工作台且审核记录未打开、标签页隐藏、退出或布局卸载时停止计时器并取消请求，保留内存中的旧实体；返回或恢复可见时重新获取。任一接口 `401` 停止调度，由鉴权处理展示失效提示及返回统一入口按钮。旧请求即使迟到，也不能覆盖停止或重启后的状态。
 
 旧 `VITE_PLATFORM_POLL_INTERVAL_SECONDS`、Docker 构建参数和运行时 `setIntervalSeconds()` 已移除，无需为探测间隔重启前端或重建镜像。后台同步与重试周期由后端负责，前端仅读取其计划。
 
 ## 验证
 
-`npm test` 覆盖公开模型、时间响应、Bearer 路径、按计划更新、空列表、后台正在同步、计划异常退避、过期结果、请求去重、取消与晚到响应、401、长计划及平台选择的保留与清理。`npm run build` 验证产物。浏览器检查悬停不打开、点击与键盘切换、全选／取消全选和部分选中状态。
+此前自动测试覆盖公开模型、时间响应、Bearer 路径、按计划更新、空列表、后台正在同步、计划异常退避、过期结果、请求去重、取消与晚到响应、401、长计划及平台选择的保留与清理。`npm run build` 验证产物。浏览器检查悬停不打开、点击与键盘切换、全选／取消全选和部分选中状态。
 
-使用 `tests/backend_fixture.py` 可验证真实 FastAPI 路由、人员认证、开发代理与浏览器更新链路。设置 `REGISTRY_TEST_PLATFORMS=1` 启用隔离目录样例；测试专用场景路由仅存在于该实例，不装配到正式后端。隔离实例使用另一个 `REGISTRY_TEST_PORT`，不能占用用户的真实后端端口。
+上述测试及 FastAPI 隔离联调属于历史验证记录，原 `tests/backend_fixture.py` 已不在当前工作区，不能直接按旧夹具命令复现。当前可运行测试及验证限制见根目录 [README](../../README.md#构建预览与验证)。重新联调需准备独立数据与端口，不能占用真实后端或修改业务数据。
 
 前端在平台列表解析后统一排除 `code === "registry"` 的注册中心自身平台，保留其他平台的原始顺序与在线／离线状态。数据中心的平台概览、全选及选择状态仅使用 `subManagementPlatforms`，包含符合标记的在线及离线平台；同步后标记变为 false 时清除对应选择。文件列表、审核记录等名称展示仍使用完整的非自身目录，不因筛选候选缩小而退回平台代号。空平台选择继续表示不限制来源，不会隐藏其他来源的文件。后续同步同样应用上述规则。

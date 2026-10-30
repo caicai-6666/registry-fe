@@ -28,7 +28,7 @@ watch(() => props.user.avatarFilename, (filename, _, onCleanup) => {
   </button>
 </template>
 <style scoped>
-.personnel-user { width: 100%; text-align: left; font: inherit; cursor: pointer; display: flex; align-items: center; gap: 16px; height: 112px; padding: 22px; border: 1px solid #91a59829; border-radius: 18px; background: linear-gradient(120deg, #ffffffb3, #f3f7f4a6); box-shadow: inset 0 1px #fff, 0 5px 18px #405a4910; transition: border-color .2s, background .2s, box-shadow .2s; }
+.personnel-user { width: 100%; text-align: left; font: inherit; cursor: pointer; display: flex; align-items: center; gap: 16px; min-height: 112px; padding: 22px; border: 1px solid #91a59829; border-radius: 18px; background: linear-gradient(120deg, #ffffffb3, #f3f7f4a6); box-shadow: inset 0 1px #fff, 0 5px 18px #405a4910; transition: border-color .2s, background .2s, box-shadow .2s; }
 .personnel-user:hover { border-color: #a4bfad; background: linear-gradient(120deg, #fff, #eef5f0); box-shadow: 0 7px 22px #405a491a; }
 .personnel-user:focus-visible { outline: 2px solid #92ae9d; outline-offset: 4px; }
 .personnel-user__avatar { display: grid; place-items: center; flex: none; width: 56px; height: 56px; overflow: hidden; border-radius: 17px; background: #e5ede7; color: #7a9584; font-size: 22px; font-weight: 500; }

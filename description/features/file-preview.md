@@ -21,7 +21,7 @@
 
 PDF、音频和视频可内嵌预览，音频／视频使用原生控件且不自动播放，编码支持由浏览器决定。未知类型提示暂不支持内嵌预览并提供新窗口打开链接，不加载 PDF 渲染器。渲染器统一接收本地 blob URL `src`、已下载的 `blob` 和 `label`，通过 `ready` 表示首屏可显示，通过 `displayed` 表示内容淡入完成，通过 `error` 返回可读错误。
 
-文件地址允许 HTTP(S)、blob 与相对路径，拒绝脚本、data 和 file 协议。原件通过注册中心受保护的正式文件或待入库文件接口读取，只有这些接口携带人员凭据；外部地址不附加平台 token。
+文件地址允许 HTTP(S)、blob 与相对路径，拒绝脚本、data 和 file 协议。原件通过注册中心受保护的正式文件或待入库文件接口读取，只有这些接口携带人员凭据；外部地址不附加用户 token。
 
 ## 文件摘要悬浮层
 
@@ -69,7 +69,9 @@ PDF.js 依赖版本沿用参考项目的 `6.3.289`，阅读器及 Worker 按需�
 
 ## 验证
 
-`npm test` 覆盖 MIME 优先级、扩展名回退、不支持类型及地址边界，以及缓存复用、请求合并、Worker 转移字节、失败重试、失效和清理后的晚到响应；浏览器检查本地 PDF 渲染、缩放、适应宽度、关闭和重复打开，并用临时验证页检查未支持音频与损坏 PDF。构建检查阅读器拆包、Worker 和运行时资源，并在统一 `/knowledge-accumulation/registry/` 路径下验证 PDF 渲染及窄屏工具栏。
+以下为历史隔离验证记录，当前可运行测试与验证限制见根目录 [README](../../README.md#构建预览与验证)。
+
+此前自动测试覆盖 MIME 优先级、扩展名回退、不支持类型及地址边界，以及缓存复用、请求合并、Worker 转移字节、失败重试、失效和清理后的晚到响应；浏览器检查本地 PDF 渲染、缩放、适应宽度、关闭和重复打开，并用临时验证页检查未支持音频与损坏 PDF。构建检查阅读器拆包、Worker 和运行时资源，并在统一 `/knowledge-accumulation/registry/` 路径下验证 PDF 渲染及窄屏工具栏。
 
 [查看 PDF 阅读器弹窗](../assets/screenshots/file-renderer-pdf-desktop.jpg) · [查看窄屏 PDF 阅读器](../assets/screenshots/file-renderer-pdf-mobile.jpg)。
 

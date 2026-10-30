@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { platformLogoUrl } from '../config/platformAppearance.js'
 import DecisionConfirmButton from './DecisionConfirmButton.vue'
 import { createPersonnelPermissionDraft, permissionLevelError } from '../models/personnelPermissions.js'
+import { personnelDepartment } from '../models/personnel.js'
 const props = defineProps({ user: { type: Object, default: null }, canSubmit: { type: Boolean, default: true }, notice: { type: String, default: '' }, pending: Boolean, error: { type: String, default: '' } })
 const emit = defineEmits(['close', 'update'])
 const dialog = ref(null), draft = ref([])
@@ -47,7 +48,7 @@ onBeforeUnmount(() => { clearTimeout(confirmationTimer); dialog.value?.close() }
   <Teleport to="body">
     <dialog ref="dialog" class="personnel-permissions" aria-labelledby="personnel-permissions-title" @cancel.prevent="close" @click="backdrop">
       <form v-if="user" class="personnel-permissions__shell" @submit.prevent="requestUpdate" :aria-busy="pending">
-        <header class="personnel-permissions__header"><div><span class="personnel-permissions__eyebrow">员工权限</span><h2 id="personnel-permissions-title">{{ user.username }}</h2><p>{{ user.departmentName }}<span>·</span>{{ user.userid }}</p></div><button class="personnel-permissions__close" type="button" aria-label="关闭员工权限" :disabled="pending" @click="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
+        <header class="personnel-permissions__header"><div><span class="personnel-permissions__eyebrow">员工权限</span><h2 id="personnel-permissions-title">{{ user.username }}</h2><p>{{ personnelDepartment(user) }}<span>·</span>{{ user.userid }}</p></div><button class="personnel-permissions__close" type="button" aria-label="关闭员工权限" :disabled="pending" @click="close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button></header>
         <div class="personnel-permissions__columns"><span>平台访问等级</span><span>平台管理员</span></div>
         <div class="personnel-permissions__body"><article v-for="(row, index) in draft" :key="row.code" class="personnel-permissions__row" :data-platform-code="row.code">
           <div class="personnel-permissions__permission"><div class="personnel-permissions__name"><span class="personnel-permissions__platform-icon" :class="{ 'has-logo': platformLogoUrl(row.code) }" aria-hidden="true"><img v-if="platformLogoUrl(row.code)" :src="platformLogoUrl(row.code)" alt="" draggable="false" /><svg v-else viewBox="0 0 20 20"><rect x="3" y="3" width="5" height="5" rx="1"/><rect x="12" y="3" width="5" height="5" rx="1"/><rect x="3" y="12" width="5" height="5" rx="1"/><rect x="12" y="12" width="5" height="5" rx="1"/></svg></span><div><h3>{{ row.name }}</h3><span>{{ row.code }}</span></div></div>
@@ -58,7 +59,7 @@ onBeforeUnmount(() => { clearTimeout(confirmationTimer); dialog.value?.close() }
           </div>
           <label v-if="row.isManagementEntry" class="personnel-permissions__administrator" :title="row.administratorKnown ? undefined : '管理员信息尚未取得'" :class="{ 'is-disabled': pending || !row.administratorKnown }"><input v-model="row.administrator" type="checkbox" :disabled="pending || !row.administratorKnown" :aria-label="`${row.name}平台管理员`" /><span class="personnel-permissions__checkmark" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="m3 8 3 3 7-7" /></svg></span></label>
         </article><p v-if="!draft.length" class="personnel-permissions__empty">暂无平台权限信息</p></div>
-        <footer class="personnel-permissions__footer"><p v-if="error" class="is-invalid" role="alert">{{ error }}</p><p v-else>{{ notice || (!canSubmit || invalid ? '请先补全有效的权限信息' : '当前仅预览，修改不会保存') }}</p><DecisionConfirmButton ref="updateButton" raised label="更新" confirm-label="确认更新" loading-label="更新中" loading-aria-label="正在更新员工权限" :confirming="confirmingUpdate" :loading="pending" :disabled="updateDisabled" @activate="submit" /></footer>
+        <footer class="personnel-permissions__footer"><p v-if="error" class="is-invalid" role="alert">{{ error }}</p><p v-else>{{ pending ? '正在保存权限并同步，请稍候' : notice || (!canSubmit || invalid ? '请先补全有效的权限信息' : '修改后点击更新，并再次确认保存') }}</p><DecisionConfirmButton ref="updateButton" raised label="更新" confirm-label="确认更新" loading-label="更新中" loading-aria-label="正在更新员工权限" :confirming="confirmingUpdate" :loading="pending" :disabled="updateDisabled" @activate="submit" /></footer>
       </form>
     </dialog>
   </Teleport>

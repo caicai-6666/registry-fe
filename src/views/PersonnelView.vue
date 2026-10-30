@@ -7,7 +7,9 @@ import PersonnelPermissionsDialog from '../components/PersonnelPermissionsDialog
 import PersonnelUserCard from '../components/PersonnelUserCard.vue'
 import ContentState from '../components/ContentState.vue'
 import { usePersonnelDirectory } from '../composables/usePersonnelDirectory.js'
-import { refreshOrganization } from '../services/personnelApi.js'
+import { refreshOrganization, updatePersonnelPermissions } from '../services/personnelApi.js'
+import { getAccessToken } from '../services/registryApi.js'
+import { createPersonnelPermissionPatch } from '../models/personnelPermissions.js'
 import { PLATFORM_DIRECTORY_KEY, PLATFORM_REFRESH_KEY } from '../services/platformDirectory.js'
 import DecisionConfirmButton from '../components/DecisionConfirmButton.vue'
 import RefreshButton from '../components/RefreshButton.vue'
@@ -18,8 +20,37 @@ const emit = defineEmits(['initial-ready'])
 const directory = usePersonnelDirectory(computed(() => active.value))
 const platformSnapshot = inject(PLATFORM_DIRECTORY_KEY)
 const refreshPlatforms = inject(PLATFORM_REFRESH_KEY)
-const permissionUser = shallowRef(null), permissionPreviewNotice = ref('')
-function openPermissions(user) { permissionPreviewNotice.value = ''; permissionUser.value = user }
+const permissionUser = shallowRef(null), permissionError = ref(''), permissionFeedback = ref(''), permissionPending = ref(false), permissionConflict = ref(false)
+function openPermissions(user) {
+  if (permissionPending.value || organizationRefreshing.value || directory.loading.value) return
+  permissionError.value = ''; permissionFeedback.value = ''; permissionConflict.value = false; permissionUser.value = user
+}
+async function reloadPermissionDirectory() {
+  directory.invalidate()
+  // 已在途的平台查询可能早于权限提交，等待其完成后再读取新快照。
+  if (platformSnapshot.value.isRefreshing) await refreshPlatforms()
+  await Promise.all([directory.load(), refreshPlatforms()])
+}
+async function updatePermissions(draft) {
+  if (permissionPending.value || permissionConflict.value || organizationRefreshing.value || !permissionUser.value) return
+  const user = permissionUser.value, token = getAccessToken()
+  permissionError.value = ''; permissionFeedback.value = ''
+  permissionPending.value = true
+  try {
+    await updatePersonnelPermissions(createPersonnelPermissionPatch(user, draft))
+    if (token !== getAccessToken()) return
+    permissionUser.value = null
+    permissionFeedback.value = `${user.username}的权限已更新。`
+    await reloadPermissionDirectory()
+  } catch (error) {
+    if (token !== getAccessToken()) return
+    permissionError.value = error.message || '权限更新失败，请稍后重试。'
+    permissionConflict.value = error.status === 409
+    if (error.status === 409 || error.status === 0 || error.status === 200 || error.status >= 500) {
+      await reloadPermissionDirectory()
+    }
+  } finally { permissionPending.value = false }
+}
 watch(() => active.value, active => { if (!active) permissionUser.value = null })
 const organizationRefreshing = ref(false), organizationFeedback = ref(''), organizationError = ref('')
 const confirmingRefresh = ref(false)
@@ -31,11 +62,11 @@ watch(confirmingRefresh, confirming => {
 watch([() => active.value, organizationRefreshing], () => { confirmingRefresh.value = false }, { flush: 'sync' })
 onBeforeUnmount(() => clearTimeout(confirmationTimer))
 function refreshDirectory() {
-  if (organizationRefreshing.value || directory.loading.value) return
+  if (organizationRefreshing.value || permissionPending.value || directory.loading.value) return
   void directory.load(); void refreshPlatforms()
 }
 async function runOrganizationRefresh() {
-  if (organizationRefreshing.value) return
+  if (organizationRefreshing.value || permissionPending.value) return
   organizationRefreshing.value = true
   organizationFeedback.value = ''; organizationError.value = ''
   try {
@@ -48,7 +79,7 @@ async function runOrganizationRefresh() {
   } finally { organizationRefreshing.value = false }
 }
 function confirmOrganizationRefresh() {
-  if (organizationRefreshing.value) return
+  if (organizationRefreshing.value || permissionPending.value) return
   if (!confirmingRefresh.value) { confirmingRefresh.value = true; return }
   void runOrganizationRefresh()
 }
@@ -61,7 +92,7 @@ const administratorPlatforms = computed(() => administratorsReady.value ? platfo
 const department = ref(''), administratorPlatform = ref(''), locatorQuery = ref(''), appliedQuery = ref(''), locatedId = ref('')
 const departments = computed(() => {
   const options = new Map(directory.departments.value.map(unit => [unit.id, unit]))
-  for (const user of users.value) if (!options.has(user.departmentId)) options.set(user.departmentId, { id: user.departmentId, name: user.departmentName })
+  for (const user of users.value) for (const unit of user.departments) if (!options.has(unit.id)) options.set(unit.id, unit)
   return [...options.values()]
 })
 watch(departments, units => { if (department.value && !units.some(unit => unit.id === department.value)) department.value = '' })
@@ -112,14 +143,16 @@ async function locateUser(query) {
         <div @keydown.enter="handleLocatorEnter"><CatalogTextFilter id="personnel-username" label="用户名" :value="locatorQuery" placeholder="输入用户名筛选" :suggestions="locatorSuggestions" @change="locatorQuery = $event; locatedId = ''" @commit="locateUser" /></div>
         <PersonnelFilterSelect id="personnel-department" v-model="department" label="所属部门" :options="departmentOptions" :disabled="!directory.loaded.value" :active="active" />
         <PersonnelFilterSelect id="personnel-administrator" v-model="administratorPlatform" label="平台管理员" :options="administratorOptions" :disabled="!administratorsReady" :active="active" />
-        <DecisionConfirmButton class="personnel__organization-refresh" raised label="刷新组织架构" confirm-label="确认刷新" loading-label="刷新中" loading-aria-label="正在刷新组织架构" :confirming="confirmingRefresh" :loading="organizationRefreshing" :disabled="directory.loading.value" @activate="confirmOrganizationRefresh" @keydown.esc="confirmingRefresh = false"><template #icon><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7a6 6 0 1 1-.3 5M4 3v4h4" /></svg></template></DecisionConfirmButton>
+        <DecisionConfirmButton class="personnel__organization-refresh" raised label="刷新组织架构" confirm-label="确认刷新" loading-label="刷新中" loading-aria-label="正在刷新组织架构" :confirming="confirmingRefresh" :loading="organizationRefreshing" :disabled="directory.loading.value || permissionPending" @activate="confirmOrganizationRefresh" @keydown.esc="confirmingRefresh = false"><template #icon><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 7a6 6 0 1 1-.3 5M4 3v4h4" /></svg></template></DecisionConfirmButton>
       </header>
       <p v-if="organizationError" class="personnel__notice" role="alert">{{ organizationError }}</p>
       <p v-else-if="organizationFeedback" class="personnel__notice personnel__notice--success" role="status">{{ organizationFeedback }}</p>
-      <p v-if="directory.error.value" class="personnel__notice" role="alert">{{ directory.error.value }} <button type="button" :disabled="directory.loading.value || organizationRefreshing" @click="refreshDirectory">重试</button></p>
-      <p v-if="platformSnapshot.error" class="personnel__notice" role="status">管理员信息更新失败：{{ platformSnapshot.error }}{{ administratorsReady ? '，暂按最近一次结果展示。' : '，管理员筛选暂不可用。' }} <button type="button" :disabled="directory.loading.value || organizationRefreshing" @click="refreshDirectory">重试</button></p>
-      <div class="personnel__list-heading"><div><h2>成员列表</h2></div><div class="personnel__list-actions"><span v-if="directory.loaded.value" aria-live="polite">{{ visibleUsers.length }} 位成员</span><RefreshButton :loading="directory.loading.value" :disabled="organizationRefreshing" label="刷新人员列表" :active="active" @refresh="refreshDirectory" /></div></div>
-      <PersonnelPermissionsDialog :user="permissionUser" :notice="permissionPreviewNotice" @close="permissionUser = null" @update="permissionPreviewNotice = '当前仅预览权限配置，尚未提交到后端。'" />
+      <p v-if="permissionFeedback" class="personnel__notice personnel__notice--success" role="status">{{ permissionFeedback }}</p>
+      <p v-if="permissionError && !permissionUser" class="personnel__notice" role="alert">{{ permissionError }}</p>
+      <p v-if="directory.error.value" class="personnel__notice" role="alert">{{ directory.error.value }} <button type="button" :disabled="directory.loading.value || organizationRefreshing || permissionPending" @click="refreshDirectory">重试</button></p>
+      <p v-if="platformSnapshot.error" class="personnel__notice" role="status">管理员信息更新失败：{{ platformSnapshot.error }}{{ administratorsReady ? '，暂按最近一次结果展示。' : '，管理员筛选暂不可用。' }} <button type="button" :disabled="directory.loading.value || organizationRefreshing || permissionPending" @click="refreshDirectory">重试</button></p>
+      <div class="personnel__list-heading"><div><h2>成员列表</h2></div><div class="personnel__list-actions"><span v-if="directory.loaded.value" aria-live="polite">{{ visibleUsers.length }} 位成员</span><RefreshButton :loading="directory.loading.value" :disabled="organizationRefreshing || permissionPending" label="刷新人员列表" :active="active" @refresh="refreshDirectory" /></div></div>
+      <PersonnelPermissionsDialog :user="permissionUser" :pending="permissionPending" :error="permissionError" :can-submit="!organizationRefreshing && !permissionConflict" @close="permissionUser = null" @update="updatePermissions" />
       <ContentState class="personnel__results" :loading="directory.loading.value" :empty="directory.loaded.value && !directory.error.value && !visibleUsers.length" loading-label="正在加载成员列表">
         <TransitionGroup name="personnel-row" tag="ul" class="personnel__list" aria-label="用户列表" @before-leave="preserveLeavingPosition">
           <li v-for="user in visibleUsers" :key="user.userid" :ref="element => element ? rows.set(user.userid, element) : rows.delete(user.userid)" tabindex="-1" :class="{ 'is-located': locatedId === user.userid }" :data-user-id="user.userid"><PersonnelUserCard :user="user" @open="openPermissions(user)" /></li>

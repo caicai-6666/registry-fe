@@ -1,10 +1,10 @@
 # 正式文件目录与原件接入
 
-数据中心结果列表使用 `GET /knowledge-accumulation/registry/api/catalog/list`，点击表项后使用 `GET /knowledge-accumulation/registry/api/resource/file/{resource_id}` 获取原件。两者均携带平台 `access_token` 的 Bearer 凭据，构建部署请求经 `/knowledge-accumulation/registry/api/` 同源代理，开发浏览器请求增加 `/dev` 前缀，由 Vite 代理移除。契约见[后端目录 API](../../../registry-be/description/api/catalog.md)与[后端原件 API](../../../registry-be/description/api/resource.md)。
+数据中心结果列表使用 `GET /knowledge-accumulation/registry/api/catalog/list`，点击表项后使用 `GET /knowledge-accumulation/registry/api/resource/file/{resource_id}` 获取原件。两者均携带共享用户 `access_token` 的 Bearer 凭据，构建部署请求经 `/knowledge-accumulation/registry/api/` 同源代理，开发浏览器请求增加 `/dev` 前缀，由网关与 Vite 原样转发。契约见[后端目录 API](../../../registry-be/description/api/catalog.md)与[后端原件 API](../../../registry-be/description/api/resource.md)。
 
 ## 目录与展示模型
 
-[`catalogApi.js`](../../src/services/catalogApi.js) 读取真实目录；[`catalogFile.js`](../../src/models/catalogFile.js) 校验并映射八个公开字段，不采用响应中额外的 URL 或内部路径。
+[`catalogApi.js`](../../src/services/catalogApi.js) 读取真实目录；[`catalogFile.js`](../../src/models/catalogFile.js) 校验并映射目录公开字段，不采用响应中额外的 URL 或内部路径。
 
 | 后端字段 | 页面用途 |
 | --- | --- |
@@ -14,6 +14,7 @@
 | `applicant` / `reviewer` | 右侧纵向对齐的人员信息，null 或空白显示“—” |
 | `ingested_at` | 入库时间，按浏览器本地时区显示至分钟 |
 | `abstract` | 摘要悬浮层，无摘要显示“暂无摘要” |
+| `file_level` | 文件等级，映射为 `fileLevel`，保留精确整数；null 或历史缺失保持未知，用于[文件等级悬浮层](file-preview.md#文件等级悬浮层)，不额外请求或在列表添加标签 |
 | `passport` | 最终通行证数组，不在表项展示；打开文件后在预览区的通行证悬浮层逐项展示，长值换行；null 或旧接口缺失显示“—”，空数组显示“无通行证” |
 
 目录不包含媒体类型，文件响应的 `Content-Type` 决定展示类型；通用二进制类型回退到目录文件名，历史未知名称时再使用 `Content-Disposition` 中的保存文件名。当前支持 PDF、音频和视频渲染，未知类型显示不支持内嵌预览提示及文件打开链接。
@@ -32,7 +33,7 @@
 
 右侧文件列表区域的右上角提供“刷新文件列表”按钮，复用审核记录的圆形刷新样式及整圈旋转动画，点击重新读取正式目录。刷新保留筛选条件和上次成功数据，失败沿用列表错误及重试提示；加载期间禁止重复点击。按钮位于独立工具区，列表滚动时保持可见；窄屏仍位于列表上方右侧。
 
-[`CatalogFilters.vue`](../../src/components/CatalogFilters.vue) 参照合同库筛选条，用 [`CatalogDateFilter.vue`](../../src/components/CatalogDateFilter.vue) 的年／月／日滚轮筛选入库时间。条件筛选在左侧栏分为日期、文件信息、通行证及人员三个层次，以细分隔线和留白区分，不增加卡片容器或标题；各筛选标签使用统一宽度，放在对应控件左侧并居中对齐；文本输入统一 38px 高，采用浅色平面、细边框及柔和聚焦反馈；日期滚轮去除立体阴影，与文本框统一圆角和配色。平台同步和平台选择也位于左栏，文件列表位于右侧。窄屏整页上下排列，不增加独立框容器。
+[`CatalogFilters.vue`](../../src/components/CatalogFilters.vue) 参照合同库筛选条，用 [`CatalogDateFilter.vue`](../../src/components/CatalogDateFilter.vue) 的年／月／日滚轮筛选入库时间。条件筛选在左侧栏分为日期、文件信息、通行证及人员三个层次，以细分隔线和留白区分，不增加卡片容器或标题；入库时间标签位于滚轮左侧；文本输入采用波浪浮动标签，具体交互见下文，日期滚轮保留浅色平面样式。平台同步和平台选择也位于左栏，文件列表位于右侧。窄屏整页上下排列，不增加独立框容器。
 
 平台概览顶部的“全选”旁提供“重置”按钮，采用用户提供的 Uiverse.io / elijahgummer 浅灰立体按键样式，保留多层阴影与按下下沉效果，适配为带图标的紧凑按钮，一次清空平台选择、入库年／月／日、通行证前缀及四项关键词，并关闭通行证提示。重置仅恢复本地筛选，不重新请求目录或改变平台同步计划；未选择平台表示不限平台。
 
@@ -40,7 +41,7 @@
 - 年份来自全部目录中的入库时间，默认“—”表示不限；选年后可选月，选月后可选日。滚动、点击及方向键均可操作，Home／End 到达两端。
 - 清空年同时清空月、日，清空月同时清空日；更换月份或年份时自动将超出月底的日期调整到当月末，包含闰年规则。目录更新后选中年份已不存在时重置日期。
 - 过滤与列表显示使用同一浏览器本地时区。仅选年筛选全年，选到月筛选整月，选到日筛选当天。
-- 日期、通行证前缀、四项关键词与平台选择在工作台路由切换时保留，整页刷新或退出后恢复默认，右侧刷新目录按钮保留条件；无匹配结果显示“暂无匹配文件”。
+- 日期、通行证前缀、四项关键词与平台选择在工作台路由切换时保留，整页刷新或退出后恢复默认，右侧刷新目录按钮保留条件；无匹配结果显示 `empty.webp` 和“空空如也”。
 
 结果列表通过过渡组呈现：新增表项淡入并从右滑入，移除表项向左滑出并淡出，保留表项平滑补位；空结果提示延后淡入，减少动画偏好下关闭过渡。
 
@@ -70,11 +71,11 @@
 
 ## 验证与边界
 
-执行 `npm test` 与 `npm run build`，总体基线及未验证项见根目录 [README](../../README.md#构建预览与验证)。测试覆盖目录校验、BIGINT 精度、通行证数组、关键词匹配及候选排序、日期与平台组合筛选、本地时区跨月／跨年、稳定降序排列、原件鉴权和预览缓存。
+执行 `npm test` 与 `npm run build`，总体基线及未验证项见根目录 [README](../../README.md#构建预览与验证)。此前自动测试覆盖目录校验、BIGINT 精度、通行证数组、关键词匹配及候选排序、日期与平台组合筛选、本地时区跨月／跨年、稳定降序排列、原件鉴权和预览缓存。
 
-[`tests/catalog_backend_fixture.py`](../../tests/catalog_backend_fixture.py) 使用真实后端路由及隔离仓库、人员和文件资源验证接口，不连接真实业务数据库或中间件。此前联调覆盖原件读取、重复打开缓存复用、接口失败后保留数据、重试及空目录。
+此前使用真实后端路由及隔离仓库、人员和文件资源验证原件读取、重复打开缓存复用、接口失败后保留数据、重试及空目录，不连接真实业务数据库或中间件。原 `tests/catalog_backend_fixture.py` 已不在当前工作区，重新验证需另行准备隔离夹具。
 
-本次在独立无头 Chrome 中检查当前桌面筛选布局和月份分组，并验证输入时列表保持、提示出现、失焦后应用筛选及重置恢复；未在本轮重新复核窄屏和完整动画时序。[查看当前数据中心](../assets/screenshots/current-data-center-desktop.webp)。
+此前在独立无头 Chrome 中检查桌面筛选布局和月份分组，并验证输入时列表保持、提示出现、失焦后应用筛选及重置恢复；该轮未重新复核窄屏和完整动画时序。[查看隔离数据中心截图](../assets/screenshots/current-data-center-desktop.webp)。
 
 以下仅为此前隔离联调的历史截图，不代表当前布局：
 
@@ -82,7 +83,5 @@
 - [历史筛选布局](../assets/screenshots/catalog-filters-desktop.jpg)
 - [通行证前缀提示](../assets/screenshots/catalog-passport-filter-desktop.jpg)
 - [多通行证历史详情](../assets/screenshots/passport-arrays-history.jpg)
-
-目录 `file_level` 映射为 `fileLevel`，保留精确整数，null 或历史缺失保持未知。该值用于[文件预览中的等级按钮](file-preview.md#文件等级悬浮层)，不额外请求，不在列表表项上添加等级标签。
 
 文本筛选框（文件名、摘要、通行证、申请人、审核人）采用 Uiverse.io / AbanoubMagdy1 的波浪浮动标签：聚焦时标签逐字上浮，底线从中心展开；有值时保持上浮，空值失焦后回落。筛选允许为空，不使用 required；原有提示、失焦应用筛选和清空逻辑保持一致，减少动画偏好下关闭动效。入库时间继续使用滚轮选择。
