@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { createPlatformDirectory, PLATFORM_DIRECTORY_KEY, PLATFORM_REFRESH_KEY } from '../services/platformDirectory.js'
+import { usePersonnelDirectory, PERSONNEL_DIRECTORY_KEY } from '../composables/usePersonnelDirectory.js'
 import ReviewHistoryDialog from '../components/ReviewHistoryDialog.vue'
 import logoUrl from '../assets/logo.webp'
 import mailboxUrl from '../assets/mailbox.webp'
@@ -9,6 +10,9 @@ import { fetchCurrentUser, getAccessToken, KNOWLEDGE_ENTRY_PATH } from '../servi
 
 const emit = defineEmits(['mailbox-change', 'ready'])
 const route = useRoute()
+const personnelDirectory = usePersonnelDirectory(computed(() => ['data-center', 'review-square', 'personnel'].includes(route.name)))
+provide(PERSONNEL_DIRECTORY_KEY, personnelDirectory)
+watch(() => route.name, personnelDirectory.ensureLoaded)
 const userName = ref('')
 const identityController = new AbortController()
 onMounted(() => {

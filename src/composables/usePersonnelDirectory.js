@@ -1,6 +1,7 @@
 import { onBeforeUnmount, onMounted, readonly, ref, shallowRef, watch } from 'vue'
 import { getAccessToken } from '../services/registryApi.js'
 import { fetchPersonnel, fetchDepartments } from '../services/personnelApi.js'
+export const PERSONNEL_DIRECTORY_KEY = Symbol('registry-personnel-directory')
 export function usePersonnelDirectory(active) {
   const records = shallowRef(Object.freeze([])), departments = shallowRef(Object.freeze([]))
   const loading = ref(false), loaded = ref(false), error = ref('')
@@ -37,5 +38,5 @@ export function usePersonnelDirectory(active) {
   watch(active, sync)
   onMounted(() => { document.addEventListener('visibilitychange', sync); sync() })
   onBeforeUnmount(() => { document.removeEventListener('visibilitychange', sync); stop() })
-  return { records: readonly(records), departments: readonly(departments), loading: readonly(loading), loaded: readonly(loaded), error: readonly(error), load, invalidate }
+  return { records: readonly(records), departments: readonly(departments), loading: readonly(loading), loaded: readonly(loaded), error: readonly(error), load, invalidate, ensureLoaded: sync }
 }

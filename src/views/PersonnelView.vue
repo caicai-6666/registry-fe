@@ -6,7 +6,7 @@ import PersonnelFilterSelect from '../components/PersonnelFilterSelect.vue'
 import PersonnelPermissionsDialog from '../components/PersonnelPermissionsDialog.vue'
 import PersonnelUserCard from '../components/PersonnelUserCard.vue'
 import ContentState from '../components/ContentState.vue'
-import { usePersonnelDirectory } from '../composables/usePersonnelDirectory.js'
+import { PERSONNEL_DIRECTORY_KEY } from '../composables/usePersonnelDirectory.js'
 import { refreshOrganization, updatePersonnelPermissions } from '../services/personnelApi.js'
 import { getAccessToken } from '../services/registryApi.js'
 import { createPersonnelPermissionPatch } from '../models/personnelPermissions.js'
@@ -17,7 +17,7 @@ import { buildPersonnelUsers, filterPersonnelUsers, findPersonnelUsers, personne
 const { active, pageRoot } = useWorkspacePage('personnel')
 let locating = false
 const emit = defineEmits(['initial-ready'])
-const directory = usePersonnelDirectory(computed(() => active.value))
+const directory = inject(PERSONNEL_DIRECTORY_KEY)
 const platformSnapshot = inject(PLATFORM_DIRECTORY_KEY)
 const refreshPlatforms = inject(PLATFORM_REFRESH_KEY)
 const permissionUser = shallowRef(null), permissionError = ref(''), permissionFeedback = ref(''), permissionPending = ref(false), permissionConflict = ref(false)

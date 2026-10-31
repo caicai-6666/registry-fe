@@ -42,3 +42,12 @@ export function parseCatalogList(payload) {
     })
   }))
 }
+
+export function mapCatalogReviewers(files, personnel) {
+  const names = new Map(personnel.map(user => [user.userid, user.name?.trim()]))
+  return Object.freeze(files.map(file => {
+    // 姓名只用于展示和文本筛选，身份匹配始终保留原始 userid。
+    const reviewer = names.get(file.reviewerIdentity) || file.reviewerIdentity || '—'
+    return reviewer === file.reviewer ? file : Object.freeze({ ...file, reviewer })
+  }))
+}
