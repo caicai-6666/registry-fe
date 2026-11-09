@@ -1,6 +1,7 @@
 import vue from '@vitejs/plugin-vue'
 import { defineConfig, loadEnv } from 'vite'
 import { iconAssetCache } from './config/iconAssetCache.js'
+import { developmentCompression } from './config/developmentCompression.js'
 
 export default defineConfig(({ command, isPreview }) => {
   const servingSource = command === 'serve' && !isPreview
@@ -21,9 +22,9 @@ export default defineConfig(({ command, isPreview }) => {
   }
   return {
     base: servingSource ? '/dev/knowledge-accumulation/registry/' : '/knowledge-accumulation/registry/',
-    plugins: [vue(), iconAssetCache()],
-    // 沿用参考项目的非隐藏缓存目录，便于映射服务器转发依赖资源。
-    cacheDir: 'node_modules/vite-cache',
+    plugins: [vue(), iconAssetCache(), developmentCompression()],
+    // 非隐藏路径便于网关转发，移出 node_modules 避免安装依赖时被清理。
+    cacheDir: 'cache/vite',
     // 图片独立输出带内容哈希的文件，供浏览器跨页面、跨刷新复用缓存。
     build: { assetsInlineLimit: filePath => /\.(?:webp|png|jpe?g|gif|svg|ico|avif)$/i.test(filePath) ? false : undefined },
     server: {
@@ -31,6 +32,7 @@ export default defineConfig(({ command, isPreview }) => {
       port: 16080,
       strictPort: true,
       allowedHosts: ['talent.szkl.com'],
+      warmup: { clientFiles: ['./src/main.js', './src/layouts/WorkspaceLayout.vue', './src/views/WorkspaceView.vue'] },
       proxy: sourceProxy,
     },
     preview: { host: '127.0.0.1', allowedHosts: ['talent.szkl.com'], proxy },

@@ -33,6 +33,7 @@
 
 # 本地依赖、产物、测试、编辑器和临时目录始终不参与提交。
 node_modules/
+/cache/
 /.vscode/
 /.idea/
 /tests/

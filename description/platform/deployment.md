@@ -30,7 +30,7 @@ test -f .env.local || cp .env.example .env.local
 npm run dev
 ```
 
-[`vite.config.js`](../../vite.config.js) 固定端口 `16080`，默认仅监听本机，端口占用时启动失败。Vite 服务与预览共用域名白名单 `talent.szkl.com` 和后端代理目标，不开放任意 Host。依赖缓存目录为 `node_modules/vite-cache`。
+[`vite.config.js`](../../vite.config.js) 固定端口 `16080`，默认仅监听本机，端口占用时启动失败。Vite 服务与预览共用域名白名单 `talent.szkl.com` 和后端代理目标，不开放任意 Host。依赖缓存目录为项目根目录的 `cache/vite`：使用非隐藏路径便于网关转发，同时避免 npm 安装依赖时清理 `node_modules` 内的额外目录。该目录不参与 Git 跟踪或 Docker 构建上下文；迁移或依赖更新后应确保 Vite 已重启，浏览器重新加载页面取得新的依赖 URL。
 
 构建和预览：
 
@@ -42,6 +42,16 @@ npm run preview
 代理目标读取通用 `.env`、`.env.local` 或进程中的 `REGISTRY_BACKEND_URL`，不读取模式专属的 `REGISTRY_` 配置文件。默认目标为 `http://127.0.0.1:16000`；地址必须是 HTTP(S) 根地址，不含凭据、路径或查询参数。修改后重启对应服务。构建产物只包含同源 API 路径，不包含后端根地址或登录配置。
 
 构建预览请求生产 API 前缀，不能直接连接仅提供 `/dev` 前缀的 IDE 后端。联调预览时，应将 `REGISTRY_BACKEND_URL` 指向提供生产前缀的后端；例如统一部署后端已在默认端口运行时，执行 `REGISTRY_BACKEND_URL=http://127.0.0.1:23000 npm run preview`。静态页面预览成功不代表 API 已联通。
+
+### 开发资源压缩与预热
+
+[`config/developmentCompression.js`](../../config/developmentCompression.js) 使用仅在 Node 侧运行的开发依赖 `compression`，在 Vite 发送静态文本时协商 gzip 或 Brotli，让资源进入 FRP 前就减少体积。gzip 使用等级 6，Brotli 使用中间件默认等级 4，压缩阈值为 1 KiB。不支持压缩的客户端继续接收原始资源；此插件不修改生产构建和 preview 的压缩行为。
+
+压缩只作用于开发页面前缀下成功的 GET 文本响应，包括 HTML、JS、CSS、JSON/source map 与 SVG；API、鉴权路径、`no-store`、`no-transform`、SSE、Range、HEAD 和二进制资源不压缩，HMR WebSocket 保持原路径。沿用 Vite 的 ETag、304 与分层缓存，响应使用 `Vary: Accept-Encoding` 区分编码。外层网关应保留相关响应头，不要重复压缩已经编码的响应；API 和鉴权原件的缓存边界不变。
+
+Vite 的 `server.warmup.clientFiles` 提前准备业务入口、公共外框与默认数据中心页面的转换结果，减少服务器启动后的转换等待，不预请求业务数据。三个工作台仍提前加载代码，保持首次切换无需额外下载页面 JS/CSS 的设计；PDF 和媒体渲染器仍按需加载，详见[页面路由](routing.md#组件与进入过程)。压缩减少传输字节，但不会消除开发源码模块的请求往返。
+
+比较优化效果时，应使用相同缓存与接口响应条件，分别记录脚本/样式请求数、实际传输字节和首屏可用时间。验证覆盖编码解压、ETag/304、HMR、首次页面切换、缓存恢复、深层路径、PDF 及鉴权失败；本机结果不能代替 FRP、公网网关及钉钉实机验收。
 
 ## 容器部署
 
@@ -75,6 +85,17 @@ docker compose ps
 
 示例见 [`.env.example`](../../.env.example)。容器内 127.0.0.1 指向自身，不能代替后端服务名。Nginx 启动时仅替换 `BACKEND_UPSTREAM`，保留自身变量；更改上游或后端容器 IP 后重新创建前端容器，无需因此重建静态资源。Vite 开发使用 `16080`，容器默认仍使用 `23080`；二者使用不同环境的 API 前缀。
 
+## 更新顺序与回退
+
+发布前先确认后端已提供以下契约：用户列表包含必填 `employment_status`（`employed`／`resigned`），组织刷新结果包含 `skipped_users`，以及入库申请的 `POST /ingestion-review/{review_id}/recommendations` 接口。旧版后端缺少员工状态会使全员目录校验失败；应先完成兼容后端的发布，再更新前端。接口定义见[人员 API](../../../registry-be/description/api/user.md)和[入库审核 API](../../../registry-be/description/api/ingestion-review.md#重新推荐并保存通行证)。
+
+1. 记录当前前端提交与正在运行的镜像 ID，给旧镜像保留独立回退标签；备份正在使用的宿主机网关配置。确认当前使用统一部署还是独立 Compose，避免重复启动。
+2. 更新生产网关的注册中心配置片段；如维护开发映射，也同步开发片段。确认每一层 `proxy_read_timeout` 为 660 秒，先执行宿主机 `nginx -t`，通过后再 reload。只更新镜像不会自动更新宿主机网关。
+3. 拉取目标版本，在所选部署目录执行配置校验、构建及前端更新。统一部署使用上文的 `registry-frontend` 命令；更新独立部署时使用 `docker compose build frontend` 和 `docker compose up -d --no-deps --wait frontend`。这一步只更新前端，不负责后端升级或数据库迁移。
+4. 从统一入口进入同源页面，核对三页切换、在职／离职显示、审核人姓名、PDF／媒体资源及重新生成建议的等待、完成和失败提示。检查生产请求不带 `/dev`，并确认网关未提前返回 504。
+
+需要回退时，在原部署方式中将前端服务重新指向保留的旧镜像标签，使用 `--no-build --no-deps` 重建该前端服务，并再次验收页面。按需恢复网关备份并先校验后 reload；不执行删除数据卷的操作。保留 660 秒代理期限兼容旧前端，回退前端不要求同步缩短超时。
+
 ## 域名网关与映射
 
 在现有 HTTPS server 中使用 [`deploy/gateway.conf`](../../deploy/gateway.conf)，并将 [`deploy/gateway-map.conf`](../../deploy/gateway-map.conf) 放入 http 上下文。部署规则把 `/knowledge-accumulation/registry/` 原样转发到 `127.0.0.1:23080`，同时覆盖页面、API、资源与 WebSocket。开发映射使用 [`deploy/development-gateway.conf`](../../deploy/development-gateway.conf)，先转发至服务器 FRP 端口 `26080`，再映射到本机 Vite `16080`，全程保留完整 `/dev/knowledge-accumulation/registry/`。FRP 隧道由外部配置提供；若网关与 Vite 同机运行，应将开发片段的上游改为 `127.0.0.1:16080`。
@@ -83,7 +104,7 @@ docker compose ps
 
 ## 缓存与失败边界
 
-- JSON 和原件 API 禁止共享缓存，普通浏览器请求期限为 15 秒；组织架构刷新同步执行，浏览器请求期限为 330 秒，Nginx 示例读取超时为 330 秒。头像按后端 Cache-Control 和 Vary 使用浏览器私有缓存。
+- JSON 和原件 API 禁止共享缓存，普通浏览器请求期限为 15 秒；组织架构刷新同步执行，浏览器请求期限为 330 秒；通行证建议重新生成可能持续数分钟，该请求等待期限为 600 秒。容器 Nginx、生产及开发网关示例的读取超时统一为 660 秒，部署时需同步应用每一层代理配置；超时不代表后端已经取消或未保存，应刷新申请列表核实。头像按后端 Cache-Control 和 Vary 使用浏览器私有缓存。
 - 带内容哈希的独立图片在 Nginx 与构建预览中使用一年 immutable 缓存；Vite 源码服务保留校验和热更新。
 - HTML 保持重新验证，缺失资源返回 404，不回退成 HTML 或错误地使用长期缓存。
 - History 深层页面回退到 `/knowledge-accumulation/registry/index.html`，API 不使用页面回退。
@@ -111,3 +132,5 @@ npm run build
 部署验收应覆盖开发页面前缀、脚本、API 的 `/dev` 原样转发及 Bearer 原样转发、共享凭据、热更新和业务功能。构建预览另检查深层页面、API、静态资源与 PDF.js 路径。测试目录按项目约定不提交；当前可运行测试与已完成验证见根目录 [README](../../README.md#构建预览与验证)，上述验收项不代表 `npm test` 已全部覆盖。
 
 部署后检查 TLS、深层页面刷新、Worker、同源凭据、接口响应类型及网关错误；不能只凭 HTTP 200 或健康检查判定业务可用。容器和远端映射需在实际部署后验收，本地验证不代表云端配置已生效。
+
+2026-11-09 发布准备核验：17 项本地自动测试、生产构建及 Dockerfile 完整镜像构建通过。隔离容器验证三个工作台深层地址、静态资源及缓存、PDF.js、缺失资源 404、API JSON、生产／开发网关路径及 POST／Bearer 原样转发；三层 Nginx 配置均为 660 秒。上游使用测试服务，不代表真实后端或远端网关已升级。

@@ -1,5 +1,16 @@
 import { parseFileLevel } from './fileLevel.js'
 import { parsePassports } from './passport.js'
+export function parsePassportRecommendations(value, { nullable = true } = {}) {
+  if (value === null && nullable) return null
+  if (!Array.isArray(value) || value.some(item => typeof item?.passport !== 'string' || !item.passport.trim() || typeof item.reason !== 'string' || !item.reason.trim())) throw new Error('通行证建议返回了无效的数据')
+  return Object.freeze(value.map(item => Object.freeze({ passport: item.passport, reason: item.reason })))
+}
+
+export function parseIngestionRecommendationResult(row) {
+  const id = typeof row?.id === 'string' ? row.id : Number.isSafeInteger(row?.id) ? String(row.id) : ''
+  if (!/^[1-9]\d{0,18}$/.test(id) || BigInt(id) > 9223372036854775807n) throw new Error('通行证建议返回了无效的审核 ID')
+  return Object.freeze({ id, passportRecommendations: parsePassportRecommendations(row.passport_recommendations, { nullable: false }) })
+}
 export function parsePendingIngestionReviews(payload) {
   if (!Array.isArray(payload)) throw new Error('入库申请返回了无效的数据')
   const ids = new Set()
@@ -9,12 +20,11 @@ export function parsePendingIngestionReviews(payload) {
     if (!/^[1-9]\d{0,18}$/.test(id) || BigInt(id) > 9223372036854775807n || ids.has(id) ||
         typeof row.source_platform !== 'string' || !row.source_platform.trim() ||
         !['name', 'abstract', 'applicant', 'source_id'].every(key => nullableString(row[key])) || typeof row.applicant_note !== 'string' ||
-        typeof row.requested_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(row.requested_at) || !Number.isFinite(Date.parse(row.requested_at)) ||
-        (row.passport_recommendations !== null && (!Array.isArray(row.passport_recommendations) || row.passport_recommendations.some(item => typeof item?.passport !== 'string' || !item.passport.trim() || typeof item.reason !== 'string' || !item.reason.trim())))) throw new Error('入库申请返回了无效的数据')
+        typeof row.requested_at !== 'string' || !/^\d{4}-\d{2}-\d{2}T.+(?:Z|[+-]\d{2}:\d{2})$/.test(row.requested_at) || !Number.isFinite(Date.parse(row.requested_at))) throw new Error('入库申请返回了无效的数据')
     ids.add(id)
     return Object.freeze({ id, sourcePlatform: row.source_platform, sourceId: row.source_id, name: row.name?.trim() || `未命名文件 #${id}`,
       summary: row.abstract, applicant: row.applicant, applicantNote: row.applicant_note, requestedAt: row.requested_at,
-      passportRecommendations: row.passport_recommendations === null ? null : Object.freeze(row.passport_recommendations.map(item => Object.freeze({ passport: item.passport, reason: item.reason }))),
+      passportRecommendations: parsePassportRecommendations(row.passport_recommendations),
     })
   }))
 }

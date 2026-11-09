@@ -79,11 +79,16 @@ async function runOrganizationRefresh() {
   organizationFeedback.value = ''; organizationError.value = ''
   try {
     const result = await refreshOrganization()
-    organizationFeedback.value = `已刷新 ${result.refreshed_users} 位员工、${result.refreshed_departments} 个部门。`
+    organizationFeedback.value = `已刷新 ${result.refreshed_users} 位员工、${result.refreshed_departments} 个部门；${result.skipped_users} 位员工未查到资料并已标记离职，${result.synced_names} 位员工的资料或状态已同步。`
     directory.invalidate()
     await Promise.all([directory.load(), refreshPlatforms()])
   } catch (error) {
     organizationError.value = error.message || '组织架构刷新失败，请稍后重试。'
+    // 部分同步失败或提交结果未知时，重读数据库快照，但不自动重发刷新操作。
+    if (error.detail?.database_updated !== false && (error.detail?.database_updated === true || error.status === 0 || error.status === 200 || error.status >= 500)) {
+      directory.invalidate()
+      await directory.load()
+    }
   } finally { organizationRefreshing.value = false }
 }
 function confirmOrganizationRefresh() {

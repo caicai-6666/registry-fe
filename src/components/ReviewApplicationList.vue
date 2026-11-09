@@ -1,6 +1,6 @@
 <script setup>
 import { platformDisplayName } from '../models/platform.js'
-defineProps({ disabled: Boolean, applications: { type: Array, required: true }, selectedId: { type: String, default: '' }, platforms: { type: Array, default: () => [] } })
+defineProps({ disabled: Boolean, applications: { type: Array, required: true }, selectedId: { type: String, default: '' }, platforms: { type: Array, default: () => [] }, recommendations: { type: Object, default: () => ({}) } })
 defineEmits(['select'])
 function preserveLeavingPosition(element) {
   element.style.left = `${element.offsetLeft}px`
@@ -19,6 +19,7 @@ function restorePosition(element) {
     <button v-for="application in applications" :key="application.id" type="button" :disabled="disabled" class="review-application" :class="{ 'is-selected': selectedId === application.id }" :aria-pressed="selectedId === application.id" @click="$emit('select', application.id)">
       <strong>{{ application.name }}</strong>
       <span class="review-application__platform"><span class="review-application__source-label">来源</span>{{ platformDisplayName(platforms, application.sourcePlatform) }}</span>
+      <span v-if="recommendations[application.id]?.pending" class="review-application__progress">建议生成中…</span>
     </button>
   </TransitionGroup>
   </div>
@@ -43,6 +44,7 @@ function restorePosition(element) {
   overflow-wrap: anywhere;
 }
 .review-application__source-label { flex: none; color: #9ca79f; font-size: 10px; font-weight: 400; }
+.review-application__progress { color: #807197; font-size: 11px; font-weight: 400; }
 .review-application strong { color: #354b3e; font-size: 13px; line-height: 1.8; font-weight: 600; overflow-wrap: anywhere; }
 .review-application-enter-active { transition: opacity .3s ease, transform .4s cubic-bezier(.22, 1, .36, 1); }
 .review-application-enter-from { opacity: 0; transform: translateY(10px); }

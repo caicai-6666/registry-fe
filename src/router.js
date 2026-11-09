@@ -1,9 +1,10 @@
 import { createRouter, createWebHistory } from 'vue-router'
+// 提前加载工作台布局代码，首次切换不等待模块下载；业务数据由内容区展示加载状态。
+import WorkspaceView from './views/WorkspaceView.vue'
+import ReviewSquareView from './views/ReviewSquareView.vue'
+import PersonnelView from './views/PersonnelView.vue'
 
 const WorkspaceLayout = () => import('./layouts/WorkspaceLayout.vue')
-const WorkspaceView = () => import('./views/WorkspaceView.vue')
-const ReviewSquareView = () => import('./views/ReviewSquareView.vue')
-const PersonnelView = () => import('./views/PersonnelView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),

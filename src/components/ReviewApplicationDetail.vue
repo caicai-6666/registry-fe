@@ -6,8 +6,9 @@ import { formatReviewTime } from '../models/reviewHistory.js'
 import DecisionConfirmButton from './DecisionConfirmButton.vue'
 import PassportValues from './PassportValues.vue'
 import PassportSelector from './PassportSelector.vue'
-const props = defineProps({ kind: { type: String, default: 'ingestion' }, application: { type: Object, required: true }, platforms: { type: Array, default: () => [] }, passportOptions: { type: Array, default: () => [] }, passportError: { type: String, default: '' }, decision: { type: Object, default: null }, busy: Boolean, active: { type: Boolean, default: true } })
-const emit = defineEmits(['preview', 'decide', 'retry', 'reload-passports'])
+import PassportRecommendations from './PassportRecommendations.vue'
+const props = defineProps({ kind: { type: String, default: 'ingestion' }, application: { type: Object, required: true }, platforms: { type: Array, default: () => [] }, passportOptions: { type: Array, default: () => [] }, passportError: { type: String, default: '' }, decision: { type: Object, default: null }, recommendationState: { type: Object, default: null }, recommendationsPending: Boolean, busy: Boolean, active: { type: Boolean, default: true } })
+const emit = defineEmits(['preview', 'decide', 'retry', 'reload-passports', 'regenerate-recommendations'])
 const drafts = reactive({}), passportDrafts = reactive({}), fileLevelDrafts = reactive({})
 const selectedPassports = computed({ get: () => props.decision?.body?.passport || passportDrafts[props.application.id] || [], set: values => { passportDrafts[props.application.id] = values } })
 const note = computed({ get: () => props.decision?.body?.note ?? drafts[props.application.id] ?? '', set: value => { drafts[props.application.id] = value } })
@@ -48,10 +49,10 @@ function decide(approved) {
       <section class="ingestion-detail__section"><div class="ingestion-detail__summary-heading"><h4>文件摘要</h4><button type="button" class="ingestion-detail__preview-file" @click="$emit('preview')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6M8 14h8M8 17h5" /></svg>文件预览</button></div><p>{{ application.summary || '暂无摘要' }}</p></section>
       <section class="ingestion-detail__section"><h4>申请信息</h4><dl><div><dt>来源平台</dt><dd>{{ platformDisplayName(platforms, application.sourcePlatform) }}</dd></div><div v-if="kind === 'deletion'"><dt>资源编号</dt><dd>{{ application.resourceId }}</dd></div><div><dt>申请人</dt><dd>{{ application.applicant || '—' }}</dd></div><div><dt>申请时间</dt><dd>{{ formatReviewTime(application.requestedAt) }}</dd></div></dl></section>
       <section class="ingestion-detail__section"><h4>{{ kind === 'deletion' ? '删除原因' : '申请人备注' }}</h4><p>{{ application.applicantNote || '申请人未填写备注' }}</p></section>
-      <section v-if="kind === 'deletion'" class="ingestion-detail__section"><h4>原通行证</h4><p><PassportValues :values="application.passport" /></p></section><section v-else class="ingestion-detail__section"><h4>通行证建议</h4><div v-if="application.passportRecommendations?.length" class="ingestion-detail__recommendations"><article v-for="item in application.passportRecommendations" :key="item.passport"><strong>{{ item.passport }}</strong><p>{{ item.reason }}</p></article></div><p v-else class="ingestion-detail__muted">{{ application.passportRecommendations === null ? '暂无推荐信息' : '暂无推荐通行证' }}</p></section>
+      <section v-if="kind === 'deletion'" class="ingestion-detail__section"><h4>原通行证</h4><p><PassportValues :values="application.passport" /></p></section><PassportRecommendations v-else class="ingestion-detail__section" :items="application.passportRecommendations" :state="recommendationState" :disabled="locked" :refresh-disabled="busy || recommendationsPending" :active="active" @regenerate="$emit('regenerate-recommendations')" @refresh="$emit('reload-passports')" />
     </div>
     <form class="ingestion-detail__review" @submit.prevent @keydown.esc="confirming = null">
-      <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" /></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy" @click="$emit('reload-passports')">重新加载</button></p>
+      <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" /></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending" @click="$emit('reload-passports')">重新加载</button></p>
       <div v-if="kind === 'ingestion'" class="ingestion-detail__level">
         <div class="ingestion-detail__level-heading"><label :for="`review-level-${application.id}`">文件等级</label><span :id="`review-level-hint-${application.id}`" :class="{ 'is-invalid': !!fileLevelError }">{{ fileLevelError || '通过时生效 · 0–100' }}</span></div>
         <div class="ingestion-detail__level-controls">
@@ -59,7 +60,7 @@ function decide(approved) {
           <input :id="`review-level-${application.id}`" v-model="fileLevel" class="ingestion-detail__level-number" type="number" min="0" max="100" step="1" :disabled="locked" :aria-describedby="`review-level-hint-${application.id}`" :aria-invalid="!!fileLevelError" />
         </div>
       </div>
-      <p v-if="kind === 'deletion' && passportError" class="ingestion-detail__error" role="alert">文件信息加载失败：{{ passportError }} <button type="button" :disabled="busy" @click="$emit('reload-passports')">重新加载</button></p><div class="ingestion-detail__note-heading"><label :for="`review-note-${application.id}`">审核员备注 <span aria-hidden="true">*</span></label><span :id="`review-note-hint-${application.id}`" class="ingestion-detail__note-hint">通过与拒绝均需填写备注</span><small>{{ Array.from(note).length }} / 10000</small></div>
+      <p v-if="kind === 'deletion' && passportError" class="ingestion-detail__error" role="alert">文件信息加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending" @click="$emit('reload-passports')">重新加载</button></p><div class="ingestion-detail__note-heading"><label :for="`review-note-${application.id}`">审核员备注 <span aria-hidden="true">*</span></label><span :id="`review-note-hint-${application.id}`" class="ingestion-detail__note-hint">通过与拒绝均需填写备注</span><small>{{ Array.from(note).length }} / 10000</small></div>
       <textarea :id="`review-note-${application.id}`" v-model="note" :disabled="locked" :aria-describedby="`review-note-hint-${application.id}`" aria-required="true" required maxlength="10000" rows="3" placeholder="请填写审核意见，通过与拒绝均需填写…"></textarea>
       <p v-if="decision?.error" class="ingestion-detail__error" role="alert">{{ decision.error }}</p>
       <p v-if="decision?.body && !decision.pending" class="ingestion-detail__feedback">提交结果尚未确认，已保留原审核决定、备注{{ kind === 'ingestion' ? '、通行证及文件等级' : '' }}，请按原请求重试。</p>
@@ -72,7 +73,7 @@ function decide(approved) {
 .ingestion-detail__body { flex: 1; min-height: 0; overflow: auto; padding: 24px 28px; }
 .ingestion-detail__section + .ingestion-detail__section { margin-top: 24px; }
 .ingestion-detail h4 { margin: 0; color: #536659; font-size: 12px; font-weight: 600; }
-.ingestion-detail__section > p, .ingestion-detail__recommendations p { margin: 10px 0 0; color: #697b6e; font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ingestion-detail__section > p { margin: 10px 0 0; color: #697b6e; font-size: 12px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .ingestion-detail__summary-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .ingestion-detail__preview-file { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 6px 10px; border: 1px solid #a99ac833; border-radius: 8px; background: #f1eef780; color: #807197; font: inherit; font-size: 11px; cursor: pointer; transition: background .2s; }
 .ingestion-detail__preview-file:hover { background: #eae4f4; }
@@ -82,10 +83,6 @@ function decide(approved) {
 .ingestion-detail dl > div { display: flex; gap: 18px; }
 .ingestion-detail dt { flex: 0 0 60px; color: #96a298; }
 .ingestion-detail dd { margin: 0; color: #586d5e; overflow-wrap: anywhere; }
-.ingestion-detail__recommendations { display: grid; gap: 9px; margin-top: 12px; }
-.ingestion-detail__recommendations article { padding: 14px 16px; border-radius: 12px; border: 1px solid #9d94c52b; background: linear-gradient(120deg, #f0edf780, #eef5f080); }
-.ingestion-detail__recommendations strong { color: #71668e; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
-.ingestion-detail__recommendations p { margin-top: 5px; font-size: 11px; }
 .ingestion-detail__review { flex: none; padding: 20px 28px 22px; border-top: 1px solid #668b701a; background: #f7faf8e6; }
 .ingestion-detail__passport-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .ingestion-detail__passport-field:disabled { opacity: .65; }

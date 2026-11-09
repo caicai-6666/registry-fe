@@ -1,10 +1,26 @@
 import { serializeIngestionDecision } from '../models/fileLevel.js'
 import { registryApiRequest } from './registryApi.js'
 import { parseReviewHistoryJson } from '../models/reviewHistory.js'
-import { createIngestionDecision, parseIngestionDecisionResult, parsePendingIngestionReviews } from '../models/ingestionReview.js'
+import { createIngestionDecision, parseIngestionDecisionResult, parsePendingIngestionReviews, parseIngestionRecommendationResult } from '../models/ingestionReview.js'
 
 export async function fetchPendingIngestionReviews({ signal } = {}) {
   return parsePendingIngestionReviews(await registryApiRequest('/ingestion-review/list', { method: 'GET', signal, parseJson: parseReviewHistoryJson }))
+}
+
+export async function regenerateIngestionRecommendations(reviewId) {
+  const id = typeof reviewId === 'string' ? reviewId : Number.isSafeInteger(reviewId) ? String(reviewId) : ''
+  if (!/^[1-9]\d{0,18}$/.test(id) || BigInt(id) > 9223372036854775807n) throw new Error('入库审核 ID 无效')
+  // 模型计算为同步长请求；十分钟后结束前端等待，不代表后端已取消。
+  const response = await registryApiRequest(`/ingestion-review/${id}/recommendations`, { method: 'POST', timeoutMs: 600000, parseJson: parseReviewHistoryJson })
+  try {
+    const result = parseIngestionRecommendationResult(response)
+    if (result.id !== id) throw new Error('通行证建议与当前申请不一致')
+    return result
+  } catch (cause) {
+    const error = new Error(cause.message)
+    error.status = 200
+    throw error
+  }
 }
 
 export async function submitIngestionDecision(reviewId, { approved, note, passport = null, file_level: fileLevel = null }, { signal } = {}) {

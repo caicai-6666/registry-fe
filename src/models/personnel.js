@@ -30,6 +30,7 @@ export function parsePersonnelList(payload) {
   return Object.freeze(payload.map(row => {
     if (!row || typeof row.userid !== 'string' || !row.userid.trim() || ids.has(row.userid) ||
         !(row.name === null || typeof row.name === 'string' && row.name.trim()) ||
+        !['employed', 'resigned'].includes(row.employment_status) ||
         !row.platform_permissions || typeof row.platform_permissions !== 'object' || Array.isArray(row.platform_permissions)) throw new Error('用户列表返回了无效的数据')
     ids.add(row.userid)
     const permissions = Object.fromEntries(Object.entries(row.platform_permissions).map(([code, value]) => {
@@ -40,7 +41,7 @@ export function parsePersonnelList(payload) {
     const departmentIds = row.department_ids === undefined ? [row.department_id] : row.department_ids
     if (!Array.isArray(departmentIds) || !departmentIds.length) throw new Error('用户部门列表无效')
     const normalizedDepartmentIds = [...new Set(departmentIds.map(id => unsignedInteger(id, 18446744073709551615n)))]
-    return Object.freeze({ userid: row.userid, name: row.name, departmentIds: Object.freeze(normalizedDepartmentIds),
+    return Object.freeze({ userid: row.userid, name: row.name, employmentStatus: row.employment_status, departmentIds: Object.freeze(normalizedDepartmentIds),
       avatarFilename: parseAvatarFilename(row.avatar_url), platformPermissions: Object.freeze(permissions) })
   }))
 }

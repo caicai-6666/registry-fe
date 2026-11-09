@@ -37,6 +37,7 @@ watch([loaded, error, loading], ([loaded, error, loading]) => {
 }, { flush: 'post' })
 const passportError = computed(() => state.value.passportError.value)
 const decisions = computed(() => state.value.decisions)
+const recommendationsPending = computed(() => state.value.recommending.value)
 function load() { return state.value.load() }
 function submit(id, input) { return state.value.submit(id, input) }
 const selectedIds = reactive({ ingestion: '', deletion: '' })
@@ -65,18 +66,18 @@ const reviewLabel = computed(() => reviewKind.value === 'ingestion' ? '文件入
       <ReviewTypeNavigation v-model="reviewKind" :active="active" />
       <FileLevelAdjustmentPanel v-show="reviewKind === 'file-level'" :active="active && reviewKind === 'file-level'" :platforms="platformSnapshot.platforms" />
       <section v-show="reviewKind !== 'file-level'" class="review-square__list" :aria-label="`${reviewLabel}申请列表`">
-        <header class="review-square__header"><h2>申请列表</h2><RefreshButton class="review-square__refresh" :label="reviewKind === 'ingestion' ? '刷新入库申请' : '刷新删除申请'" :loading="loading" :disabled="submitting || !detailVisible" :active="active" @refresh="load" /></header>
+        <header class="review-square__header"><h2>申请列表</h2><RefreshButton class="review-square__refresh" :label="reviewKind === 'ingestion' ? '刷新入库申请' : '刷新删除申请'" :loading="loading" :disabled="submitting || recommendationsPending || !detailVisible" :active="active" @refresh="load" /></header>
         <Transition name="review-square-content" mode="out-in" @before-leave="element => { element.inert = true }">
           <div :key="reviewKind" class="review-square__list-body" :aria-busy="loading">
-            <p v-if="error" class="review-square__status" role="alert">{{ error }}<button type="button" :disabled="loading || submitting" @click="load">重试</button></p>
-            <ContentState :loading="loading" :empty="loaded && !error && !applications.length" loading-label="正在加载申请列表"><div class="review-square__list-scroll"><ReviewApplicationList :applications="applications" :selected-id="selectedId" :platforms="platformSnapshot.platforms" :disabled="submitting || !detailVisible || loading" @select="selectedId = $event" /></div></ContentState>
+            <p v-if="error" class="review-square__status" role="alert">{{ error }}<button type="button" :disabled="loading || submitting || recommendationsPending" @click="load">重试</button></p>
+            <ContentState :loading="loading" :empty="loaded && !error && !applications.length" loading-label="正在加载申请列表"><div class="review-square__list-scroll"><ReviewApplicationList :applications="applications" :recommendations="state.recommendations" :selected-id="selectedId" :platforms="platformSnapshot.platforms" :disabled="submitting || !detailVisible || loading" @select="selectedId = $event" /></div></ContentState>
           </div>
         </Transition>
       </section>
       <section v-show="reviewKind !== 'file-level'" class="review-square__detail" :aria-label="`${reviewLabel}申请详情`">
         <header class="review-square__header"><h2>申请详情</h2></header>
         <Transition name="review-square-content" mode="out-in" @after-enter="finishDetailLeave" @before-leave="element => { element.inert = true }">
-          <div :key="reviewKind" class="review-square__detail-body"><ContentState :loading="loading" :empty="!selectedApplication && !error" detail loading-label="正在加载申请详情"><Transition name="review-square-detail" @before-leave="element => { element.inert = true }" @before-enter="element => { element.inert = false }" @leave-cancelled="element => { element.inert = false }" @after-leave="finishDetailLeave"><div v-show="detailVisible" class="review-square__detail-content"><ReviewApplicationDetail v-if="displayedApplication" :kind="reviewKind" :application="displayedApplication" :platforms="platformSnapshot.platforms" :active="active" :passport-options="options" :passport-error="passportError" :decision="decisions[displayedApplication.id]" :busy="submitting || !detailVisible" @reload-passports="load" @decide="submit(selectedId, $event)" @retry="submit(selectedId)" @preview="previewApplication(displayedApplication)" /></div></Transition></ContentState></div>
+          <div :key="reviewKind" class="review-square__detail-body"><ContentState :loading="loading" :empty="!selectedApplication && !error" detail loading-label="正在加载申请详情"><Transition name="review-square-detail" @before-leave="element => { element.inert = true }" @before-enter="element => { element.inert = false }" @leave-cancelled="element => { element.inert = false }" @after-leave="finishDetailLeave"><div v-show="detailVisible" class="review-square__detail-content"><ReviewApplicationDetail v-if="displayedApplication" :kind="reviewKind" :application="displayedApplication" :platforms="platformSnapshot.platforms" :active="active" :passport-options="options" :passport-error="passportError" :decision="decisions[displayedApplication.id]" :recommendation-state="state.recommendations[displayedApplication.id]" :recommendations-pending="recommendationsPending" @regenerate-recommendations="state.regenerateRecommendations(displayedApplication.id)" :busy="submitting || !detailVisible" @reload-passports="load" @decide="submit(selectedId, $event)" @retry="submit(selectedId)" @preview="previewApplication(displayedApplication)" /></div></Transition></ContentState></div>
         </Transition>
       </section>
     </section>
