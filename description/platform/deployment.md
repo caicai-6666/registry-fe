@@ -104,8 +104,9 @@ docker compose ps
 
 ## 缓存与失败边界
 
+- 生产容器为 HTML、JS、CSS、JSON、XML 和 SVG 静态文本开启 gzip，阈值 1 KiB、等级 6，按 `Accept-Encoding` 协商并返回 `Vary: Accept-Encoding`。经网关转发的静态请求同样可压缩，网关透传编码响应；API 路径显式关闭此层 gzip，图片、PDF、音视频等二进制不重复压缩。不支持 gzip 的客户端仍收到原文；生产未配置 Brotli。更新后需重建并重新创建前端容器才生效。
 - JSON 和原件 API 禁止共享缓存，普通浏览器请求期限为 15 秒；组织架构刷新同步执行，浏览器请求期限为 330 秒；通行证建议重新生成可能持续数分钟，该请求等待期限为 600 秒。容器 Nginx、生产及开发网关示例的读取超时统一为 660 秒，部署时需同步应用每一层代理配置；超时不代表后端已经取消或未保存，应刷新申请列表核实。头像按后端 Cache-Control 和 Vary 使用浏览器私有缓存。
-- 带内容哈希的独立图片在 Nginx 与构建预览中使用一年 immutable 缓存；Vite 源码服务保留校验和热更新。
+- 生产 Nginx 的 `assets/` 版本化 JS、CSS、图片等使用一年 immutable 缓存；压缩不改变缓存期限。构建预览仅为版本化图片显式设置相同长期缓存；Vite 源码服务保留校验和热更新。
 - HTML 保持重新验证，缺失资源返回 404，不回退成 HTML 或错误地使用长期缓存。
 - History 深层页面回退到 `/knowledge-accumulation/registry/index.html`，API 不使用页面回退。
 - `/healthz` 只检查前端 Nginx，不证明后端、数据库或消息服务可用。
