@@ -94,7 +94,8 @@ const reviewLabel = computed(() => reviewKind.value === 'ingestion' ? '文件入
 .review-square__header h2 { margin: 0; color: #354f40; font-size: 15px; font-weight: 600; }
 .review-square__header > span { color: #89968e; font-size: 11px; }
 .review-square__detail-content { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.review-square__detail-body { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.review-square__detail-body { position: relative; z-index: 1; display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.review-square__detail-body :deep(.content-state__content) { overflow: visible; }
 .review-square__refresh { position: absolute; right: 22px; }
 .review-square__status { padding: 12px 20px; color: #89988e; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; }
 .review-square__status button { margin-left: 8px; border: 0; background: transparent; color: #807197; cursor: pointer; }
