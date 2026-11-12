@@ -25,6 +25,7 @@ const locked = computed(() => props.busy || Boolean(props.decision?.body))
 const canDecide = computed(() => !locked.value && !!note.value.trim() && Array.from(note.value).length <= 10000)
 const confirming = ref(null)
 const submittedAction = ref(null)
+const reviewCollapsed = ref(false)
 const loadingAction = computed(() => props.decision?.pending ? props.decision.body.approved : props.busy ? submittedAction.value : null)
 watch(() => props.decision?.pending, pending => { if (pending) submittedAction.value = props.decision.body.approved }, { flush: 'sync' })
 watch(() => props.application.id, () => { submittedAction.value = null }, { flush: 'sync' })
@@ -52,7 +53,9 @@ function decide(approved) {
       <section class="ingestion-detail__section"><h4>{{ kind === 'deletion' ? '删除原因' : '申请人备注' }}</h4><p>{{ application.applicantNote || '申请人未填写备注' }}</p></section>
       <section v-if="kind === 'deletion'" class="ingestion-detail__section"><h4>原通行证</h4><p><PassportValues :values="application.passport" /></p></section><PassportRecommendations v-else class="ingestion-detail__section" :items="application.passportRecommendations" :state="recommendationState" :disabled="locked" :refresh-disabled="busy || recommendationsPending" :active="active" @regenerate="$emit('regenerate-recommendations')" @refresh="$emit('reload-passports')" />
     </div>
-    <form class="ingestion-detail__review" @submit.prevent @keydown.esc="confirming = null">
+    <form class="ingestion-detail__review" :class="{ 'is-collapsed': reviewCollapsed }" @submit.prevent @keydown.esc="confirming = null">
+      <div class="ingestion-detail__review-heading"><div><h4>审核操作</h4><span v-if="reviewCollapsed" class="ingestion-detail__review-summary">{{ selectedPassports.length ? `已选 ${selectedPassports.length} 个通行证` : '未选择现有通行证' }} · 等级 {{ fileLevel }}</span></div><button type="button" class="ingestion-detail__review-toggle" :aria-expanded="!reviewCollapsed" :aria-controls="`review-controls-${application.id}`" @click="reviewCollapsed = !reviewCollapsed">{{ reviewCollapsed ? '展开审核控件' : '收起审核控件' }}<span aria-hidden="true">{{ reviewCollapsed ? '⌃' : '⌄' }}</span></button></div>
+      <div v-show="!reviewCollapsed" :id="`review-controls-${application.id}`" class="ingestion-detail__review-controls">
       <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" :refreshing="catalogRefreshing" @refresh="$emit('refresh-passports')" /><label class="ingestion-detail__new-passport"><input v-model="generateNewPassport" type="checkbox" /><span><strong>额外新建通行证</strong><small>审核通过后由后端追加生成一个 UUID 通行证</small></span></label></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending || catalogRefreshing" @click="$emit('reload-passports')">重新加载</button></p>
       <div v-if="kind === 'ingestion'" class="ingestion-detail__level">
         <div class="ingestion-detail__level-heading"><label :for="`review-level-${application.id}`">文件等级</label><span :id="`review-level-hint-${application.id}`" :class="{ 'is-invalid': !!fileLevelError }">{{ fileLevelError || '通过时生效 · 0–100' }}</span></div>
@@ -63,9 +66,10 @@ function decide(approved) {
       </div>
       <p v-if="kind === 'deletion' && passportError" class="ingestion-detail__error" role="alert">文件信息加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending" @click="$emit('reload-passports')">重新加载</button></p><div class="ingestion-detail__note-heading"><label :for="`review-note-${application.id}`">审核员备注 <span aria-hidden="true">*</span></label><span :id="`review-note-hint-${application.id}`" class="ingestion-detail__note-hint">通过与拒绝均需填写备注</span><small>{{ Array.from(note).length }} / 10000</small></div>
       <textarea :id="`review-note-${application.id}`" v-model="note" :disabled="locked" :aria-describedby="`review-note-hint-${application.id}`" aria-required="true" required maxlength="10000" rows="3" placeholder="请填写审核意见，通过与拒绝均需填写…"></textarea>
+      <div class="ingestion-detail__actions"><button v-if="decision?.body && !decision.pending" type="button" class="ingestion-detail__approve" :disabled="busy" @click="$emit('retry')">重试原审核决定</button><DecisionConfirmButton v-for="action in actions" :key="String(action.approved)" :label="action.label" :confirming="confirming === action.approved" :loading="loadingAction === action.approved" :disabled="action.approved ? !canApprove : !canDecide" :class="action.approved ? 'ingestion-detail__approve' : 'ingestion-detail__reject'" @activate="decide(action.approved)" /></div>
+      </div>
       <p v-if="decision?.error" class="ingestion-detail__error" role="alert">{{ decision.error }}</p>
       <p v-if="decision?.body && !decision.pending" class="ingestion-detail__feedback">提交结果尚未确认，已保留原审核决定、备注{{ kind === 'ingestion' ? '、通行证及文件等级' : '' }}，请按原请求重试。</p>
-      <div class="ingestion-detail__actions"><button v-if="decision?.body && !decision.pending" type="button" class="ingestion-detail__approve" :disabled="busy" @click="$emit('retry')">重试原审核决定</button><DecisionConfirmButton v-for="action in actions" :key="String(action.approved)" :label="action.label" :confirming="confirming === action.approved" :loading="loadingAction === action.approved" :disabled="action.approved ? !canApprove : !canDecide" :class="action.approved ? 'ingestion-detail__approve' : 'ingestion-detail__reject'" @activate="decide(action.approved)" /></div>
     </form>
   </div>
 </template>
@@ -84,7 +88,17 @@ function decide(approved) {
 .ingestion-detail dl > div { display: flex; gap: 18px; }
 .ingestion-detail dt { flex: 0 0 60px; color: #96a298; }
 .ingestion-detail dd { margin: 0; color: #586d5e; overflow-wrap: anywhere; }
-.ingestion-detail__review { flex: none; padding: 20px 28px 22px; border-top: 1px solid #668b701a; background: #f7faf8e6; }
+.ingestion-detail__review { flex: none; padding: 14px 28px 18px; border-top: 1px solid #668b701a; background: #f7faf8e6; }
+.ingestion-detail__review.is-collapsed { padding-bottom: 14px; }
+.ingestion-detail__review-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 28px; }
+.ingestion-detail__review-heading > div { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.ingestion-detail__review-heading h4 { flex: none; }
+.ingestion-detail__review-summary { overflow: hidden; color: #98a39b; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.ingestion-detail__review-toggle { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 5px 8px; border: 1px solid #a1b2a53b; border-radius: 8px; background: #ffffffaa; color: #718078; font: inherit; font-size: 11px; cursor: pointer; }
+.ingestion-detail__review-toggle:hover { background: #fff; color: #536659; }
+.ingestion-detail__review-toggle:focus-visible { outline: 2px solid #9389c7; outline-offset: 2px; }
+.ingestion-detail__review-toggle span { color: #9389b5; font-size: 13px; line-height: .8; }
+.ingestion-detail__review-controls { padding-top: 12px; }
 .ingestion-detail__passport-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .ingestion-detail__passport-field:disabled { opacity: .65; }
 .ingestion-detail__new-passport { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; color: #536659; font-size: 12px; cursor: pointer; }
@@ -123,6 +137,6 @@ function decide(approved) {
 .ingestion-detail__reject:hover:not(:disabled) { background: #fbf1f2; }
 .ingestion-detail__feedback, .ingestion-detail__error { margin: 10px 0 0; font-size: 11px; line-height: 1.8; color: #78816f; }
 .ingestion-detail__error { color: #ad6872; }
-@media (max-width: 760px) { .ingestion-detail__body { overflow: visible; padding: 20px 18px; } .ingestion-detail__review { padding: 18px; } .ingestion-detail__actions { flex-wrap: wrap; } .ingestion-detail__note-hint { order: 3; flex-basis: 100%; } .ingestion-detail__actions button { flex: 1; } }
+@media (max-width: 760px) { .ingestion-detail__body { overflow: visible; padding: 20px 18px; } .ingestion-detail__review { padding: 14px 18px 18px; } .ingestion-detail__actions { flex-wrap: wrap; } .ingestion-detail__note-hint { order: 3; flex-basis: 100%; } .ingestion-detail__actions button { flex: 1; } }
 @media (prefers-reduced-motion: reduce) { .ingestion-detail__actions button { transition: none; } }
 </style>
