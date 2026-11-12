@@ -13,12 +13,12 @@ export function useReviewApplications(active, kind = 'ingestion') {
   const fetchPending = kind === 'deletion' ? fetchPendingDeletionReviews : fetchPendingIngestionReviews
   const sendDecision = kind === 'deletion' ? submitDeletionDecision : submitIngestionDecision
   const createDecision = kind === 'deletion' ? createDeletionDecision : createIngestionDecision
-  const loading = ref(false), loaded = ref(false), error = ref(''), passportError = ref('')
+  const loading = ref(false), loaded = ref(false), error = ref(''), passportError = ref(''), catalogRefreshing = ref(false)
   const decisions = reactive({})
   const recommendations = reactive({})
   const recommending = computed(() => Object.values(recommendations).some(item => item.pending))
-  let request = null, disposed = false, initialized = false, cachedToken = getAccessToken()
-  function stop() { request?.abort(); request = null; loading.value = false }
+  let request = null, catalogRequest = null, disposed = false, initialized = false, cachedToken = getAccessToken()
+  function stop() { request?.abort(); request = null; catalogRequest?.abort(); catalogRequest = null; loading.value = false; catalogRefreshing.value = false }
   function syncCredential() {
     const token = getAccessToken()
     if (token === cachedToken) return
@@ -27,6 +27,22 @@ export function useReviewApplications(active, kind = 'ingestion') {
     error.value = ''; passportError.value = ''
     Object.keys(decisions).forEach(id => delete decisions[id])
     Object.keys(recommendations).forEach(id => delete recommendations[id])
+  }
+  async function refreshCatalog() {
+    syncCredential()
+    if (!active.value || document.visibilityState === 'hidden' || disposed || catalogRequest || request) return
+    const current = new AbortController(), token = cachedToken
+    catalogRequest = current; catalogRefreshing.value = true; passportError.value = ''
+    try {
+      const rows = await fetchCatalog({ signal: current.signal })
+      if (getAccessToken() !== token) { syncCredential(); return }
+      if (catalogRequest !== current) return
+      catalog.value = rows; options.value = passportOptions(rows.flatMap(row => row.passport || []))
+    } catch (cause) {
+      if (getAccessToken() === token && catalogRequest === current && cause.name !== 'AbortError') passportError.value = cause.message || '文件目录加载失败'
+    } finally {
+      if (catalogRequest === current) { catalogRequest = null; catalogRefreshing.value = false }
+    }
   }
   async function load() {
     syncCredential()
@@ -76,7 +92,7 @@ export function useReviewApplications(active, kind = 'ingestion') {
   async function submit(id, input) {
     if (getAccessToken() !== cachedToken) { syncCredential(); void load(); return }
     if (decisions[id]?.pending || Object.values(decisions).some(item => item.pending)) return
-    const body = decisions[id]?.body || createDecision(input.approved, input.note, input.passport, input.file_level)
+    const body = decisions[id]?.body || createDecision(input.approved, input.note, input.passport, input.file_level, input.generate_new_passport)
     const token = cachedToken
     stop()
     decisions[id] = { pending: true, body, error: '' }
@@ -102,5 +118,5 @@ export function useReviewApplications(active, kind = 'ingestion') {
   watch(active, sync)
   onMounted(() => { document.addEventListener('visibilitychange', sync); sync() })
   onBeforeUnmount(() => { disposed = true; stop(); document.removeEventListener('visibilitychange', sync) })
-  return { applications, options, loading, loaded, error, passportError, decisions, recommendations, recommending, load, submit, regenerateRecommendations }
+  return { applications, options, loading, loaded, error, passportError, catalogRefreshing, decisions, recommendations, recommending, load, refreshCatalog, submit, regenerateRecommendations }
 }

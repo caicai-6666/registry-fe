@@ -1,11 +1,11 @@
 <script setup>
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { addExistingPassport, suggestPassports } from '../models/passportSelection.js'
-const props = defineProps({ modelValue: { type: Array, required: true }, options: { type: Array, required: true } })
-const emit = defineEmits(['update:modelValue'])
+const props = defineProps({ modelValue: { type: Array, required: true }, options: { type: Array, required: true }, refreshing: Boolean })
+const emit = defineEmits(['update:modelValue', 'refresh'])
 const id = useId()
 const addButton = ref(null), searchInput = ref(null), selectionViewport = ref(null)
-async function showPicker() { open.value = true; await nextTick(); searchInput.value?.focus() }
+async function showPicker() { emit('refresh'); open.value = true; await nextTick(); searchInput.value?.focus() }
 async function dismissPicker() { open.value = false; query.value = ''; await nextTick(); addButton.value?.focus() }
 const query = ref(''), open = ref(false), highlighted = ref(-1)
 const suggestions = computed(() => suggestPassports(props.options, props.modelValue, query.value))
@@ -44,7 +44,7 @@ function close(event) { if (!event.currentTarget.contains(event.relatedTarget)) 
           <span v-for="value in modelValue" :key="value"><span>{{ value }}</span><button type="button" :aria-label="`移除通行证 ${value}`" @click="emit('update:modelValue', modelValue.filter(item => item !== value))">×</button></span>
         </TransitionGroup>
       </div>
-      <button :id="`${id}-add`" ref="addButton" type="button" class="passport-selector__add" aria-label="新增通行证" :aria-describedby="`${id}-hint`" :aria-expanded="open" :aria-controls="`${id}-picker`" @click="open ? dismissPicker() : showPicker()">＋</button>
+      <button :id="`${id}-add`" ref="addButton" type="button" class="passport-selector__add" :class="{ 'is-refreshing': refreshing }" aria-label="新增通行证" :aria-describedby="`${id}-hint`" :aria-expanded="open" :aria-controls="`${id}-picker`" :aria-busy="refreshing" @click="open ? dismissPicker() : showPicker()"><i v-if="refreshing" class="passport-selector__spinner" aria-hidden="true"></i><span v-else>＋</span></button>
       <Transition name="passport-picker"><div v-if="open" :id="`${id}-picker`" class="passport-selector__picker">
         <input :id="`${id}-input`" ref="searchInput" v-model="query" type="text" role="combobox" aria-label="搜索现存通行证" aria-autocomplete="list" :aria-expanded="open" :aria-controls="`${id}-suggestions`" :aria-activedescendant="highlighted >= 0 ? `${id}-option-${highlighted}` : undefined" autocomplete="off" placeholder="输入前缀，搜索现存通行证…" @keydown.down.prevent="move(1)" @keydown.up.prevent="move(-1)" @keydown.enter.prevent="choose" />
         <div :id="`${id}-suggestions`" class="passport-selector__suggestions" role="listbox" aria-label="现存通行证提示">
@@ -75,6 +75,9 @@ function close(event) { if (!event.currentTarget.contains(event.relatedTarget)) 
 .passport-selector__selected button:focus-visible { outline: 2px solid #9389c7; }
 .passport-selector__add { display: grid; place-items: center; flex: none; width: 32px; height: 30px; padding: 0; border: 1px dashed #b2a7cd; border-radius: 8px; background: #f8f6fb; color: #9788b4; font-size: 21px; line-height: 1; cursor: pointer; }
 .passport-selector__add:hover { background: #eee9f7; border-color: #9989ba; }
+.passport-selector__add.is-refreshing { color: #807197; background: #f1eef7; }
+.passport-selector__spinner { width: 13px; height: 13px; border: 1.5px solid #b8accc66; border-top-color: #807197; border-radius: 50%; animation: passport-selector-spin .8s linear infinite; }
+@keyframes passport-selector-spin { to { transform: rotate(360deg); } }
 .passport-selector__picker { position: absolute; z-index: 4; bottom: calc(100% + 8px); left: 0; width: min(100%, 420px); min-width: min(260px, 100%); overflow: hidden; border: 1px solid #b4b4c336; border-radius: 11px; background: #fbfcfb; box-shadow: 0 8px 24px #34423b24; }
 .passport-selector__picker input { border-bottom: 1px solid #a1b2a526; border-radius: 0; padding: 13px 14px; }
 .passport-selector__suggestions { max-height: 180px; padding: 5px; overflow: auto; }
@@ -93,5 +96,5 @@ function close(event) { if (!event.currentTarget.contains(event.relatedTarget)) 
 .passport-picker-leave-active { pointer-events: none; transition: opacity .14s ease, transform .18s ease; transform-origin: bottom left; }
 .passport-picker-enter-from, .passport-picker-leave-to { opacity: 0; transform: translateY(5px) scale(.97); }
 @media (max-width: 1100px) { .passport-selector__heading { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 36px; } }
-@media (prefers-reduced-motion: reduce) { .passport-chip-enter-active, .passport-chip-leave-active, .passport-chip-move, .passport-picker-enter-active, .passport-picker-leave-active { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .passport-chip-enter-active, .passport-chip-leave-active, .passport-chip-move, .passport-picker-enter-active, .passport-picker-leave-active { transition: none; } .passport-selector__spinner { animation: none; } }
 </style>

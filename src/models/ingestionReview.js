@@ -29,15 +29,16 @@ export function parsePendingIngestionReviews(payload) {
   }))
 }
 
-export function createIngestionDecision(approved, note, passport = null, fileLevel = null) {
+export function createIngestionDecision(approved, note, passport = null, fileLevel = null, generateNewPassport = false) {
   if (typeof approved !== 'boolean') throw new Error('审核结论无效')
   if (typeof note !== 'string' || !note.trim()) throw new Error('请填写审核员备注')
   if (Array.from(note).length > 10000) throw new Error('审核员备注不能超过 10000 字')
+  if (typeof generateNewPassport !== 'boolean') throw new Error('新增通行证选项无效')
   const level = approved ? parseFileLevel(fileLevel) : null
   if (!approved && fileLevel !== null && fileLevel !== undefined) throw new Error('拒绝入库不能设置文件等级')
   const values = parsePassports(passport)
-  // 空选择省略字段，让后端生成；拒绝始终提交空数组。
-  return Object.freeze({ approved, note: note.trim(), ...(approved ? { file_level: level } : {}), ...(!approved ? { passport: Object.freeze([]) } : values?.length ? { passport: values } : {}) })
+  // 未选择已有通行证时省略 passport；是否额外生成由独立布尔字段控制。
+  return Object.freeze({ approved, note: note.trim(), generate_new_passport: approved ? generateNewPassport : false, ...(approved ? { file_level: level } : {}), ...(!approved ? { passport: Object.freeze([]) } : values?.length ? { passport: values } : {}) })
 }
 
 export function parseIngestionDecisionResult(row) {

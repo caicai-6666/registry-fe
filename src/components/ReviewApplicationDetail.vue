@@ -7,12 +7,13 @@ import DecisionConfirmButton from './DecisionConfirmButton.vue'
 import PassportValues from './PassportValues.vue'
 import PassportSelector from './PassportSelector.vue'
 import PassportRecommendations from './PassportRecommendations.vue'
-const props = defineProps({ kind: { type: String, default: 'ingestion' }, application: { type: Object, required: true }, platforms: { type: Array, default: () => [] }, passportOptions: { type: Array, default: () => [] }, passportError: { type: String, default: '' }, decision: { type: Object, default: null }, recommendationState: { type: Object, default: null }, recommendationsPending: Boolean, busy: Boolean, active: { type: Boolean, default: true } })
-const emit = defineEmits(['preview', 'decide', 'retry', 'reload-passports', 'regenerate-recommendations'])
-const drafts = reactive({}), passportDrafts = reactive({}), fileLevelDrafts = reactive({})
+const props = defineProps({ kind: { type: String, default: 'ingestion' }, application: { type: Object, required: true }, platforms: { type: Array, default: () => [] }, passportOptions: { type: Array, default: () => [] }, passportError: { type: String, default: '' }, catalogRefreshing: Boolean, decision: { type: Object, default: null }, recommendationState: { type: Object, default: null }, recommendationsPending: Boolean, busy: Boolean, active: { type: Boolean, default: true } })
+const emit = defineEmits(['preview', 'decide', 'retry', 'reload-passports', 'refresh-passports', 'regenerate-recommendations'])
+const drafts = reactive({}), passportDrafts = reactive({}), fileLevelDrafts = reactive({}), generateNewPassportDrafts = reactive({})
 const selectedPassports = computed({ get: () => props.decision?.body?.passport || passportDrafts[props.application.id] || [], set: values => { passportDrafts[props.application.id] = values } })
 const note = computed({ get: () => props.decision?.body?.note ?? drafts[props.application.id] ?? '', set: value => { drafts[props.application.id] = value } })
 const fileLevel = computed({ get: () => props.decision?.body?.file_level ?? fileLevelDrafts[props.application.id] ?? '0', set: value => { fileLevelDrafts[props.application.id] = String(value) } })
+const generateNewPassport = computed({ get: () => props.decision?.body?.generate_new_passport ?? generateNewPassportDrafts[props.application.id] ?? false, set: value => { generateNewPassportDrafts[props.application.id] = Boolean(value) } })
 const fileLevelError = computed(() => {
   try {
     const level = BigInt(parseFileLevel(fileLevel.value))
@@ -34,13 +35,13 @@ watch(confirming, value => {
 }, { flush: 'sync' })
 onBeforeUnmount(() => clearTimeout(confirmationTimer))
 const actions = [{ approved: false, label: '拒绝' }, { approved: true, label: '通过' }]
-watch([() => props.application.id, note, selectedPassports, fileLevel, locked, () => props.active], () => { confirming.value = null }, { flush: 'sync' })
+watch([() => props.application.id, note, selectedPassports, fileLevel, generateNewPassport, locked, () => props.active], () => { confirming.value = null }, { flush: 'sync' })
 function decide(approved) {
   if (!canDecide.value || (approved && !canApprove.value)) return
   if (confirming.value !== approved) { confirming.value = approved; return }
   submittedAction.value = approved
   confirming.value = null
-  emit('decide', { approved, note: note.value, ...(props.kind === 'ingestion' ? { passport: selectedPassports.value, ...(approved ? { file_level: fileLevel.value } : {}) } : {}) })
+  emit('decide', { approved, note: note.value, ...(props.kind === 'ingestion' ? { passport: selectedPassports.value, generate_new_passport: approved ? generateNewPassport.value : false, ...(approved ? { file_level: fileLevel.value } : {}) } : {}) })
 }
 </script>
 <template>
@@ -52,7 +53,7 @@ function decide(approved) {
       <section v-if="kind === 'deletion'" class="ingestion-detail__section"><h4>原通行证</h4><p><PassportValues :values="application.passport" /></p></section><PassportRecommendations v-else class="ingestion-detail__section" :items="application.passportRecommendations" :state="recommendationState" :disabled="locked" :refresh-disabled="busy || recommendationsPending" :active="active" @regenerate="$emit('regenerate-recommendations')" @refresh="$emit('reload-passports')" />
     </div>
     <form class="ingestion-detail__review" @submit.prevent @keydown.esc="confirming = null">
-      <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" /></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending" @click="$emit('reload-passports')">重新加载</button></p>
+      <fieldset v-if="kind === 'ingestion'" class="ingestion-detail__passport-field" :disabled="locked"><PassportSelector v-model="selectedPassports" :options="passportOptions" :refreshing="catalogRefreshing" @refresh="$emit('refresh-passports')" /><label class="ingestion-detail__new-passport"><input v-model="generateNewPassport" type="checkbox" /><span><strong>额外新建通行证</strong><small>审核通过后由后端追加生成一个 UUID 通行证</small></span></label></fieldset><p v-if="kind === 'ingestion' && passportError" class="ingestion-detail__error" role="alert">现存通行证加载失败：{{ passportError }} <button type="button" :disabled="busy || recommendationsPending || catalogRefreshing" @click="$emit('reload-passports')">重新加载</button></p>
       <div v-if="kind === 'ingestion'" class="ingestion-detail__level">
         <div class="ingestion-detail__level-heading"><label :for="`review-level-${application.id}`">文件等级</label><span :id="`review-level-hint-${application.id}`" :class="{ 'is-invalid': !!fileLevelError }">{{ fileLevelError || '通过时生效 · 0–100' }}</span></div>
         <div class="ingestion-detail__level-controls">
@@ -86,6 +87,11 @@ function decide(approved) {
 .ingestion-detail__review { flex: none; padding: 20px 28px 22px; border-top: 1px solid #668b701a; background: #f7faf8e6; }
 .ingestion-detail__passport-field { min-width: 0; margin: 0; padding: 0; border: 0; }
 .ingestion-detail__passport-field:disabled { opacity: .65; }
+.ingestion-detail__new-passport { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; color: #536659; font-size: 12px; cursor: pointer; }
+.ingestion-detail__new-passport input { flex: none; width: 15px; height: 15px; margin: 1px 0 0; accent-color: #807197; cursor: pointer; }
+.ingestion-detail__new-passport span { display: grid; gap: 2px; }
+.ingestion-detail__new-passport strong { font-weight: 600; }
+.ingestion-detail__new-passport small { color: #98a39b; font-size: 10px; line-height: 1.5; }
 .ingestion-detail__error button { border: 0; background: transparent; color: #807197; font: inherit; cursor: pointer; }
 .ingestion-detail__level { margin: 4px 0 18px; }
 .ingestion-detail__level-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
